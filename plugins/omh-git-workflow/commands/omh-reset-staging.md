@@ -76,11 +76,18 @@ AskUserQuestion:
 
 ### Step 3A — Feature mode flow
 
-Discover work branches (exclude those already merged to master — already merged means they're part of master now, no need to stage separately):
+Discover work branches — MUST handle both merge-commit AND squash-merge styles (GitHub defaults to squash). `git branch --no-merged` only catches the former:
+
 ```bash
 git fetch origin --prune
-# List remote work branches that are NOT yet merged to master
-git branch -r --no-merged origin/master | grep -E 'origin/[A-Z]+-[0-9]+' | sed 's|.*origin/||'
+
+# List remote work branches not yet on master by content
+for ref in $(git branch -r --format='%(refname:short)' | grep -E 'origin/[A-Z]+-[0-9]+' | sed 's|.*origin/||'); do
+  # git cherry prints "+ sha" for commits NOT on master (by patch-id)
+  if git cherry origin/master "origin/$ref" 2>/dev/null | grep -q '^+'; then
+    echo "$ref"    # truly unmerged
+  fi
+done
 ```
 
 If the filtered list is empty → stop with: *"No unmerged work branches. Feature-mode staging reset requires at least one active branch (use `Release verify` or `Master only` mode instead)."*

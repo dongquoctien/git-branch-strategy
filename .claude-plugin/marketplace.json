@@ -7,14 +7,14 @@
   },
   "metadata": {
     "description": "Internal Claude Code plugins for OhMyHotel engineering — git workflow, PR automation, release management following the company Git Branch Strategy.",
-    "version": "1.1.0"
+    "version": "1.1.1"
   },
   "plugins": [
     {
       "name": "omh-git-workflow",
       "source": "./plugins/omh-git-workflow",
       "description": "14 slash commands that automate the OMH git branch strategy: new-branch, commit, open-pr, check-pr, release, cherry-pick, reset-develop, reset-staging, sync-local, sync-master, hotfix, rollback, delete-branch, status.",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "author": {
         "name": "OhMyHotel DevTools",
         "email": "devtools@ohmyhotel.com"

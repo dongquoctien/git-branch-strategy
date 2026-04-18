@@ -35,26 +35,46 @@ Parse arguments from: $ARGUMENTS
 
 If `$ARGUMENTS` provides a branch name → validate it and skip to Step 2.
 
-Otherwise auto-discover merged branches:
+Otherwise auto-discover merged branches. **IMPORTANT**: `git branch --merged` only detects merge-commit merges, NOT squash-merges (which are the default on GitHub). Use `git cherry` for content-based detection:
 
 ```bash
 git fetch origin --prune
-# Local merged branches (but not master/develop/staging/current)
-git branch --merged origin/master | grep -vE '^\*|master|develop|staging' | sed 's/^[[:space:]]*//'
-# Remote merged branches
-git branch -r --merged origin/master | grep -vE 'origin/(master|develop|staging|HEAD)' | sed 's|origin/||'
+
+# For each candidate branch, classify:
+#   --merged detects merge-commit merges (traditional flow)
+#   git cherry detects squash-merges (GitHub default) — outputs "+ sha" only for commits NOT on master
+is_merged_into_master() {
+  local ref=$1
+  # Exit 0 if all commits on branch are already on master (by content, via patch-id)
+  ! git cherry origin/master "$ref" 2>/dev/null | grep -q '^+'
+}
+
+# Collect candidate work branches (local + remote), then filter
+candidates=()
+for ref in $(git branch --format='%(refname:short)' | grep -vE '^(master|develop|staging)$'); do
+  is_merged_into_master "$ref" && candidates+=("$ref (local)")
+done
+for ref in $(git branch -r --format='%(refname:short)' | grep -vE 'origin/(master|develop|staging|HEAD)$' | sed 's|origin/||'); do
+  is_merged_into_master "origin/$ref" && candidates+=("$ref (remote)")
+done
 ```
 
 Build union of local + remote merged branches (deduped).
 
-If list is empty → report "No merged branches to delete. Checked local + remote against `origin/master`." and stop.
+If list is empty → report "No merged branches to delete. Checked local + remote against `origin/master` (includes squash-merges)." and stop.
 
 ### Step 2 — Verify the target branch
 
 For each candidate branch, gather metadata:
 ```bash
-# Is it actually merged? (double-check against origin/master)
-git merge-base --is-ancestor <branch> origin/master && echo merged || echo unmerged
+# Double-check merged status — merge-commit OR squash-merge
+if git merge-base --is-ancestor <branch> origin/master; then
+  echo "merged (merge-commit)"
+elif ! git cherry origin/master <branch> | grep -q '^+'; then
+  echo "merged (squash — content on master under different SHA)"
+else
+  echo "unmerged"
+fi
 
 # Does it exist locally / remotely?
 git show-ref --verify --quiet refs/heads/<branch>     # local
@@ -123,13 +143,25 @@ AskUserQuestion:
 git branch -d <branch>
 ```
 
-If `git branch -d` refuses ("not fully merged"), stop and prompt:
+If `git branch -d` refuses ("not fully merged"), it's likely a **squash-merge** (git native detection doesn't see them). Re-verify via cherry check before forcing:
+
+```bash
+if ! git cherry origin/master <branch> | grep -q '^+'; then
+  # Content is on master via squash — safe to force-delete local
+  git branch -D <branch>
+else
+  # Genuinely unmerged — prompt user
+  ask via AskUserQuestion
+fi
+```
+
+For the "genuinely unmerged" case:
 ```
 AskUserQuestion:
-  question: "Local <branch> has unmerged commits. Git refuses -d. Force?"
+  question: "Local <branch> has commits not on master. Force delete anyway?"
   header:   "Unmerged"
   options:
-    - "Cancel" (Recommended) — description: "Investigate unmerged commits (git log master..branch)"
+    - "Cancel" (Recommended) — description: "Investigate: git log origin/master..<branch>"
     - "Force delete local (-D)" — description: "IRREVERSIBLE: git branch -D discards unmerged commits"
 ```
 
