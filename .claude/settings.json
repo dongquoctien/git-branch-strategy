@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "extraKnownMarketplaces": {
+    "ohmyhotel-tools": {
+      "source": {
+        "source": "github",
+        "repo": "dongquoctien/git-branch-strategy"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "omh-git-workflow@ohmyhotel-tools": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git remote:*)",
+      "Bash(git fetch:*)",
+      "Bash(git tag:*)",
+      "Bash(git rev-list:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git merge-base:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git config --get:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh auth status)",
+      "mcp__mcp-atlassian__jira_get_issue",
+      "mcp__mcp-atlassian__jira_search",
+      "mcp__bitbucket__getPullRequest",
+      "mcp__bitbucket__getPullRequests",
+      "mcp__bitbucket__getPullRequestStatuses",
+      "mcp__bitbucket__getPullRequestActivity",
+      "mcp__github__pull_request_read",
+      "mcp__github__list_pull_requests",
+      "mcp__github__get_commit",
+      "mcp__github__list_commits",
+      "mcp__github__list_branches",
+      "mcp__github__list_tags"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(git reset:*)",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)",
+      "Bash(git rebase:*)",
+      "Bash(git cherry-pick:*)",
+      "Bash(git revert:*)",
+      "Bash(git tag -a:*)",
+      "Bash(git stash:*)",
+      "Bash(git clean:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh pr edit:*)",
+      "mcp__bitbucket__createPullRequest",
+      "mcp__bitbucket__updatePullRequest",
+      "mcp__bitbucket__mergePullRequest",
+      "mcp__github__create_pull_request",
+      "mcp__github__update_pull_request",
+      "mcp__github__merge_pull_request",
+      "mcp__mcp-atlassian__jira_add_comment",
+      "mcp__mcp-atlassian__jira_create_issue"
+    ],
+    "deny": [
+      "Bash(git push --force origin master:*)",
+      "Bash(git push --force origin main:*)",
+      "Bash(git push -f origin master:*)",
+      "Bash(git push -f origin main:*)",
+      "Bash(rm -rf:*)",
+      "Bash(git commit --no-verify:*)",
+      "Bash(git commit -n:*)"
+    ]
+  }
+}
