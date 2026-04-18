@@ -118,6 +118,9 @@ Either the GitHub MCP server OR the `gh` CLI authenticated with `gh auth login`.
 **Scenario**: you have a new Jira ticket `ELS-234` "add dark mode toggle".
 
 ```
+# 0. (optional) One-screen overview of current state
+/omh-status
+
 # 1. Create branch from master (skill validates Jira, kebab-case, clean tree)
 /omh-new-branch ELS-234
 
@@ -126,27 +129,38 @@ Either the GitHub MCP server OR the `gh` CLI authenticated with `gh auth login`.
 # 2. Commit with the 50/72 convention (auto-fills type/scope from diff)
 /omh-commit
 
-# 3. Open PR to master (auto-fills all required fields from §13)
+# 3. If master moved while you worked, catch up (rebase)
+/omh-sync-master
+
+# 4. Open PR to master (auto-fills all required fields from §13)
 /omh-open-pr
 
-# 4. Before asking for review, audit readiness
+# 5. Before asking for review, audit readiness
 /omh-check-pr
+
+# 6. After PR merges, clean up the branch
+/omh-delete-branch
 ```
 
-That covers **95% of daily work**. The other 8 commands are situational (release cycle, hotfix, staging reset) — most engineers only touch `/omh-sync-local` and `/omh-cherry-pick` occasionally.
+That covers **95% of daily work**. The other 10 commands are situational (release cycle, hotfix, staging reset) — most engineers only touch `/omh-sync-master`, `/omh-delete-branch`, `/omh-status` regularly.
+
+**Tip**: run `/omh-status` at the start of each session for a 1-screen view of where you are and what to do next.
 
 ---
 
-## 7. Full cheatsheet — all 11 commands
+## 7. Full cheatsheet — all 14 commands
 
 ### Daily work (everyone)
 
 | Command | When | Key rules |
 |---|---|---|
+| `/omh-status` | Start of session | Read-only dashboard: branch, PR, CI, stale branches, next action |
 | `/omh-new-branch <JIRA-KEY>` | Starting a ticket | Branch = `{KEY}-{desc}`, from `origin/master`, no `feature/` prefix |
 | `/omh-commit` | Staging → commit | `<type>(<scope>): <subject>` ≤50 chars, body 72 wrap, auto `Refs: KEY` |
+| `/omh-sync-master` | Branch falls behind master | Rebase (single-dev) or merge (multi-dev) per §16 |
 | `/omh-open-pr` | Ready for review | All 8 required fields, rebase check, risk inference |
 | `/omh-check-pr` | Before merge | Field audit + CI + approvals + rebase scorecard |
+| `/omh-delete-branch` | After PR merged | Verify merged, delete local + remote per §12 |
 
 ### Throwaway-branch hygiene
 
