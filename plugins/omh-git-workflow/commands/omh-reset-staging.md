@@ -76,11 +76,14 @@ AskUserQuestion:
 
 ### Step 3A — Feature mode flow
 
-Discover work branches:
+Discover work branches (exclude those already merged to master — already merged means they're part of master now, no need to stage separately):
 ```bash
 git fetch origin --prune
-git branch -r | grep -E 'origin/[A-Z]+-[0-9]+' | sed 's|.*origin/||'
+# List remote work branches that are NOT yet merged to master
+git branch -r --no-merged origin/master | grep -E 'origin/[A-Z]+-[0-9]+' | sed 's|.*origin/||'
 ```
+
+If the filtered list is empty → stop with: *"No unmerged work branches. Feature-mode staging reset requires at least one active branch (use `Release verify` or `Master only` mode instead)."*
 
 Ask user to pick via `AskUserQuestion` with multiSelect: true (up to 4 shown; if more, user types via Other):
 ```

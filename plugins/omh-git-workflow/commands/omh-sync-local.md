@@ -37,18 +37,23 @@ Parse arguments from: $ARGUMENTS
 Run in parallel:
 ```bash
 git fetch origin --prune
-git rev-list --left-right --count develop...origin/develop    # local vs remote
-git rev-list --left-right --count staging...origin/staging
 git status --porcelain
 git branch --show-current
+# Check if local branch exists before diff-counting
+git show-ref --verify --quiet refs/heads/develop && \
+  git rev-list --left-right --count develop...origin/develop
+git show-ref --verify --quiet refs/heads/staging && \
+  git rev-list --left-right --count staging...origin/staging
 ```
 
-For each of `develop` and `staging`, compare local vs remote:
-- If local has commits remote doesn't AND vice versa → **diverged** (reset needed)
-- If local is behind only → fast-forward is enough
-- If local == remote → no-op
+For each of `develop` and `staging`:
+- **Local branch does NOT exist**: offer to create it tracking remote (fast-forward first-time setup) — no reset needed
+- **Local exists**: compare local vs remote:
+  - If local has commits remote doesn't AND vice versa → **diverged** (reset needed)
+  - If local is behind only → fast-forward is enough
+  - If local == remote → no-op
 
-Build candidate list of branches needing sync.
+Build candidate list of branches needing sync (include first-time-setup cases).
 
 ### Step 2 — Working tree check
 
