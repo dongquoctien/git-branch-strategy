@@ -105,9 +105,20 @@ git push origin vX.Y.Z
 3. Bump marketplace `metadata.version`
 4. Tag repo; users pick it up via `/plugin marketplace update ohmyhotel-tools`
 
+## Roadmap (deferred)
+
+Phase 5B — 3 items logged for future consideration after pilot feedback on v1.2.0. All items must remain rule-aligned (§) to stay in scope:
+
+1. **`/omh-validate-deploy`** — monitor §19 Deployment Validation gates for 30 min post-tag-push (health check, error rate, logs, business metrics). Maps §19 + §15 post-deploy responsibility.
+2. **`/omh-request-ai-review`** — trigger §18 AI review tools (Copilot, Claude, SonarQube). Complements `/omh-ci-status` which only monitors.
+3. **`generate-release-notes.yml`** — GitHub Action: on tag push, generate GitHub Release notes from commits + Jira keys. Maps §23. Plugin-repo infra like `validate-manifest.yml`.
+
+Explicitly **NOT** on the roadmap (rejected as out-of-scope for git-branch-strategy): `/omh-stash`, `/omh-babysit-pr` (built-in `/loop` covers it), `/omh-weekly-report`, `/omh-jira-update` (belongs in a potential separate `omh-jira-workflow` plugin).
+
 ## Do NOT
 
 - Do not remove rules from skills without updating `README.md` first — the doc is authoritative
 - Do not add skills that bypass CI gates, PR approvals, or Tech Lead involvement (per §15)
+- Do not add skills that don't map to a specific `§` section — plugin scope is strictly the git-branch-strategy doc
 - Do not commit real Jira keys, PR numbers, or internal URLs as examples — use placeholders like `ELS-123`, `OMH-4857`
 - Do not store secrets in plugin files (they are git-tracked and distributed to every engineer)
