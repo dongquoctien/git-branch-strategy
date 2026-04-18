@@ -46,7 +46,7 @@ Run in parallel:
 git branch --show-current
 git fetch origin --tags --prune
 git tag --sort=-version:refname | head -5
-git log origin/master..HEAD --oneline    # ensure local master == remote
+git rev-list --count master..origin/master  # commits behind — must be 0
 git status --porcelain
 ```
 

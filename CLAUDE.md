@@ -71,6 +71,20 @@ When changing a skill, bump:
 
 Tag the repo with the version (e.g. `v1.1.0`) after merge. Claude Code uses git tags + `plugin.json version` to decide whether to prompt users to update. A new tag **without** a version bump will be ignored.
 
+**Tag cleanup on patch rollovers**: when a patch bump ships via PR (e.g. `v1.0.0 → v1.0.1`), keep the old tag — it's a historical marker. Do NOT delete. But ensure:
+
+- The **new** tag points at the merge commit of the version-bump PR, not at an older commit
+- `marketplace.json` `plugins[].version` AND `plugin.json` `version` match the tag exactly
+- If you forget to tag after merge, Claude Code will keep installing the previous version — users will see stale behavior
+
+Recommended post-merge ritual (until CI automation lands):
+```bash
+git fetch origin master
+git checkout master && git pull
+git tag -a vX.Y.Z -m "Release vX.Y.Z: <short>"
+git push origin vX.Y.Z
+```
+
 ## Adding a new skill
 
 1. Create `plugins/omh-git-workflow/commands/omh-<action>.md`

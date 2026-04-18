@@ -1,0 +1,110 @@
+name: Auto-tag plugin version
+
+# Automatically creates and pushes a git tag matching the version in
+# plugin.json whenever that version changes on master. Claude Code
+# uses the git tag to decide whether to offer plugin updates to
+# installed users — so a missed tag means users stay on the stale
+# cached version (see CLAUDE.md SemVer rules).
+#
+# Trigger: any push to master (typically via merged PR).
+# Skip conditions: version unchanged, or tag already exists.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'plugins/**/.claude-plugin/plugin.json'
+      - '.claude-plugin/marketplace.json'
+
+permissions:
+  contents: write  # needed to push tags
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read plugin version
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' plugins/omh-git-workflow/.claude-plugin/plugin.json)
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "::error::Could not read version from plugin.json"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Plugin version: $VERSION"
+
+      - name: Read marketplace version
+        id: mkt_version
+        run: |
+          MKT_VERSION=$(jq -r '.plugins[0].version' .claude-plugin/marketplace.json)
+          echo "version=$MKT_VERSION" >> $GITHUB_OUTPUT
+          echo "Marketplace version: $MKT_VERSION"
+
+      - name: Verify versions match
+        run: |
+          PLUGIN_V="${{ steps.version.outputs.version }}"
+          MKT_V="${{ steps.mkt_version.outputs.version }}"
+          if [ "$PLUGIN_V" != "$MKT_V" ]; then
+            echo "::error::Version mismatch — plugin.json=$PLUGIN_V, marketplace.json=$MKT_V. Keep them in sync per CLAUDE.md."
+            exit 1
+          fi
+          echo "Versions match: $PLUGIN_V"
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            EXISTING_SHA=$(git rev-list -n 1 "$TAG")
+            CURRENT_SHA="${{ github.sha }}"
+            if [ "$EXISTING_SHA" = "$CURRENT_SHA" ]; then
+              echo "exists_at_head=true" >> $GITHUB_OUTPUT
+              echo "Tag $TAG already exists at current commit — nothing to do"
+            else
+              echo "exists_elsewhere=true" >> $GITHUB_OUTPUT
+              echo "::warning::Tag $TAG exists at $EXISTING_SHA but master HEAD is $CURRENT_SHA. Refusing to move tag — bump version first."
+              exit 1
+            fi
+          else
+            echo "exists_at_head=false" >> $GITHUB_OUTPUT
+            echo "exists_elsewhere=false" >> $GITHUB_OUTPUT
+            echo "Tag $TAG does not exist — will create"
+          fi
+
+      - name: Configure git identity
+        if: steps.check_tag.outputs.exists_at_head == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push tag
+        if: steps.check_tag.outputs.exists_at_head == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          TAG="v$VERSION"
+          MESSAGE="Release $TAG: auto-tagged from plugin.json"
+          git tag -a "$TAG" -m "$MESSAGE"
+          git push origin "$TAG"
+          echo "::notice::Pushed new tag $TAG at ${{ github.sha }}"
+
+      - name: Summary
+        if: always()
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          {
+            echo "## Auto-tag result"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Plugin version | \`$VERSION\` |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Tag action | ${{ steps.check_tag.outputs.exists_at_head == 'true' && 'skipped (tag already at HEAD)' || 'created and pushed' }} |"
+          } >> $GITHUB_STEP_SUMMARY
