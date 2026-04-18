@@ -94,11 +94,21 @@ Before actually rebasing/merging, check for likely conflicts:
 # For rebase: list files that differ between branch and master
 git diff --name-only HEAD...origin/master
 
-# Optional deeper check: merge-tree (git 2.38+) returns conflict info without touching working tree
-git merge-tree --write-tree --merge-base=$(git merge-base HEAD origin/master) HEAD origin/master 2>&1
+# Deeper check: merge-tree (git 2.38+) returns a tree OID on clean merge,
+# non-zero exit + conflict markers on conflicts
+if ! merge_output=$(git merge-tree --write-tree \
+     --merge-base=$(git merge-base HEAD origin/master) \
+     HEAD origin/master 2>&1); then
+  # Conflicts — extract paths marked with <<<<<<< in merge_output
+  conflicting_files=$(echo "$merge_output" | grep -E '^[^<=>]+\t' | awk '{print $NF}' | sort -u)
+  has_conflicts=true
+else
+  # Clean — merge_output is a tree SHA
+  has_conflicts=false
+fi
 ```
 
-If `merge-tree` reports conflicts, extract conflicting paths and prompt:
+If `has_conflicts=true`, extract conflicting paths and prompt:
 ```
 AskUserQuestion:
   question: "Conflicts likely in N files: <paths>. Continue?"

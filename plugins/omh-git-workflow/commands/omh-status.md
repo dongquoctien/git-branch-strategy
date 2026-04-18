@@ -136,17 +136,22 @@ If none → omit this section.
 
 Decision tree based on current state:
 
-| State | Suggestion |
-|---|---|
-| On master, no open PRs | `/omh-new-branch <JIRA-KEY>` to start new work |
-| On master, develop stale | `/omh-reset-develop` (if Tech Lead) |
-| On work branch, dirty tree | `/omh-commit` to save progress |
-| On work branch, clean + behind master | `/omh-sync-master` to rebase |
-| On work branch, clean + ahead of master, no PR | `/omh-open-pr` |
-| On work branch, PR open, CI running | "⏳ Wait for CI — then `/omh-check-pr`" |
-| On work branch, PR approved | "✅ Ready to merge — Tech Lead should squash" |
-| On release branch + QA pending | `/omh-reset-staging release <branch>` |
-| Merged PR, still on branch | `/omh-delete-branch` |
+Evaluate conditions in order; the **first match wins**:
+
+| Priority | State | Suggestion |
+|---|---|---|
+| 1 | On work branch, merged PR exists | `/omh-delete-branch` to clean up |
+| 2 | On work branch, dirty tree | `/omh-commit` to save progress |
+| 3 | On work branch, clean + behind master | `/omh-sync-master` to rebase |
+| 4 | On work branch, clean + ahead of master, no PR | `/omh-open-pr` |
+| 5 | On work branch, PR open, CI failing | "❌ Fix CI failures — check dashboard first" |
+| 6 | On work branch, PR open, CI running | "⏳ Wait for CI — then `/omh-check-pr`" |
+| 7 | On work branch, PR approved, CI green | "✅ Ready to merge — Tech Lead should squash" |
+| 8 | On release branch + QA pending | `/omh-reset-staging release <branch>` |
+| 9 | On master, develop stale (Tech Lead) | `/omh-reset-develop` |
+| 10 | On master, mergeable branches remain (squash-merged) | `/omh-delete-branch` to clean up stale remotes |
+| 11 | On master, no open PRs, no stale cleanup needed | `/omh-new-branch <JIRA-KEY>` to start new work |
+| 12 | Fallback | "Nothing urgent. Check Jira board for next ticket." |
 
 Pick the single highest-priority suggestion and print it. Don't flood the user with options.
 
