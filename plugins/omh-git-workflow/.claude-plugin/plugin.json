@@ -1,17 +1,13 @@
 {
-  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
   "name": "omh-git-workflow",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "OhMyHotel Git Branch Strategy — 11 slash commands that enforce the company's throwaway-branch workflow, PR standards, release flow, and hotfix procedure. Based on the internal Git Branch Strategy document (§6–§23).",
   "author": {
     "name": "OhMyHotel DevTools",
     "email": "devtools@ohmyhotel.com"
   },
   "homepage": "https://github.com/dongquoctien/git-branch-strategy",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/dongquoctien/git-branch-strategy"
-  },
+  "repository": "https://github.com/dongquoctien/git-branch-strategy",
   "license": "UNLICENSED",
   "keywords": [
     "git",
@@ -22,63 +18,5 @@
     "conventional-commits",
     "jira",
     "ohmyhotel"
-  ],
-  "commands": [
-    {
-      "name": "omh-new-branch",
-      "description": "Create work branch from master following Jira naming convention (§6, §11)"
-    },
-    {
-      "name": "omh-commit",
-      "description": "Create commit with Conventional Commits + 50/72 rule (§14)"
-    },
-    {
-      "name": "omh-open-pr",
-      "description": "Open PR to master with full required template (§13, §15)"
-    },
-    {
-      "name": "omh-check-pr",
-      "description": "Audit PR readiness — fields, CI gates, approvals, rebase (§13, §15)"
-    },
-    {
-      "name": "omh-release",
-      "description": "Tech Lead release flow — branch, reset staging, tag, deploy (§8)"
-    },
-    {
-      "name": "omh-cherry-pick",
-      "description": "Upstream-first cherry-pick of master commits to release branch (§9, §15)"
-    },
-    {
-      "name": "omh-reset-develop",
-      "description": "Tech Lead reset of throwaway develop branch to master (§6, §15)"
-    },
-    {
-      "name": "omh-reset-staging",
-      "description": "Tech Lead reset of throwaway staging branch — feature or release mode (§7, §15)"
-    },
-    {
-      "name": "omh-sync-local",
-      "description": "Sync local develop/staging after Tech Lead reset (§6, §7)"
-    },
-    {
-      "name": "omh-hotfix",
-      "description": "Full 7-phase hotfix flow from production tag (§10, §15)"
-    },
-    {
-      "name": "omh-rollback",
-      "description": "Production rollback procedure — pipeline re-trigger or revert+re-tag (§20, §21)"
-    }
-  ],
-  "requires": {
-    "mcpServers": [
-      {
-        "name": "mcp-atlassian",
-        "reason": "Required for Jira ticket validation in /omh-new-branch, /omh-open-pr, /omh-hotfix, /omh-rollback"
-      },
-      {
-        "name": "bitbucket or github",
-        "reason": "Required for PR operations in /omh-open-pr and /omh-check-pr (skill auto-detects which remote)"
-      }
-    ]
-  }
+  ]
 }
