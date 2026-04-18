@@ -1,7 +1,7 @@
 {
   "name": "omh-git-workflow",
-  "version": "1.1.1",
-  "description": "OhMyHotel Git Branch Strategy — 14 slash commands that enforce the company's throwaway-branch workflow, PR standards, release flow, and hotfix procedure. Based on the internal Git Branch Strategy document (§6–§23).",
+  "version": "1.2.0",
+  "description": "OhMyHotel Git Branch Strategy — 17 slash commands that enforce the company's throwaway-branch workflow, PR standards, release flow, and hotfix procedure. Based on the internal Git Branch Strategy document (§6–§23).",
   "author": {
     "name": "OhMyHotel DevTools",
     "email": "devtools@ohmyhotel.com"

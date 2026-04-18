@@ -135,20 +135,27 @@ Either the GitHub MCP server OR the `gh` CLI authenticated with `gh auth login`.
 # 4. Open PR to master (auto-fills all required fields from §13)
 /omh-open-pr
 
-# 5. Before asking for review, audit readiness
-/omh-check-pr
+# 5. Assign Tech Lead + domain expert per §15
+/omh-reviewers
 
-# 6. After PR merges, clean up the branch
+# 6. Watch CI gates (§15)
+/omh-ci-status
+
+# 7. Before asking for review, audit readiness
+/omh-check-pr
+# If blockers: /omh-fix-pr to walk through fixes
+
+# 8. After PR merges, clean up the branch
 /omh-delete-branch
 ```
 
-That covers **95% of daily work**. The other 10 commands are situational (release cycle, hotfix, staging reset) — most engineers only touch `/omh-sync-master`, `/omh-delete-branch`, `/omh-status` regularly.
+That covers **95% of daily work**. The other 13 commands are situational (release cycle, hotfix, staging reset, CI monitoring) — most engineers only touch `/omh-sync-master`, `/omh-delete-branch`, `/omh-status`, `/omh-ci-status` regularly.
 
 **Tip**: run `/omh-status` at the start of each session for a 1-screen view of where you are and what to do next.
 
 ---
 
-## 7. Full cheatsheet — all 14 commands
+## 7. Full cheatsheet — all 17 commands
 
 ### Daily work (everyone)
 
@@ -159,8 +166,11 @@ That covers **95% of daily work**. The other 10 commands are situational (releas
 | `/omh-commit` | Staging → commit | `<type>(<scope>): <subject>` ≤50 chars, body 72 wrap, auto `Refs: KEY` |
 | `/omh-sync-master` | Branch falls behind master | Rebase (single-dev) or merge (multi-dev) per §16 |
 | `/omh-open-pr` | Ready for review | All 8 required fields, rebase check, risk inference |
-| `/omh-check-pr` | Before merge | Field audit + CI + approvals + rebase scorecard |
-| `/omh-delete-branch` | After PR merged | Verify merged, delete local + remote per §12 |
+| `/omh-check-pr` | Before merge (audit) | Read-only scorecard of §13 + §15 compliance |
+| `/omh-fix-pr` | Before merge (actionable) | Walk through blockers, offer fix for each |
+| `/omh-ci-status` | After push | Check CI gates per §15 — Build, Tests, Lint, Sonar, AI review |
+| `/omh-reviewers` | When PR ready for review | Auto-assign Tech Lead + domain expert per §15 |
+| `/omh-delete-branch` | After PR merged | Verify merged (incl. squash), delete local + remote per §12 |
 
 ### Throwaway-branch hygiene
 
