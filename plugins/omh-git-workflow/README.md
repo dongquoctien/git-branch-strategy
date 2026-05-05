@@ -1,6 +1,6 @@
 # omh-git-workflow
 
-Claude Code plugin implementing the **OhMyHotel Git Branch Strategy** as 17 interactive slash commands.
+Claude Code plugin implementing the **OhMyHotel Git Branch Strategy** as 18 interactive slash commands.
 
 See the repo-root [README.md](../../README.md) for the full strategy document (§1–§23) and the [team onboarding guide](../../docs/TEAM-ONBOARDING.md) for install + usage.
 
@@ -12,6 +12,7 @@ See the repo-root [README.md](../../README.md) for the full strategy document (�
 |---|---|---|
 | `/omh-new-branch` | Create work branch from master | §6, §11 |
 | `/omh-commit` | Commit with Conventional + 50/72 | §14 |
+| `/omh-squash` | Squash branch commits into one (preserves co-authors) | §14, §16 |
 | `/omh-sync-master` | Rebase/merge branch onto latest master | §16 |
 | `/omh-open-pr` | Open PR to master with full template | §13, §15 |
 | `/omh-check-pr` | Audit PR readiness (read-only scorecard) | §13, §15 |
