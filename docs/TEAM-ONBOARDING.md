@@ -155,7 +155,7 @@ That covers **95% of daily work**. The other 13 commands are situational (releas
 
 ---
 
-## 7. Full cheatsheet — all 17 commands
+## 7. Full cheatsheet — all 18 commands
 
 ### Daily work (everyone)
 
@@ -164,6 +164,7 @@ That covers **95% of daily work**. The other 13 commands are situational (releas
 | `/omh-status` | Start of session | Read-only dashboard: branch, PR, CI, stale branches, next action |
 | `/omh-new-branch <JIRA-KEY>` | Starting a ticket | Branch = `{KEY}-{desc}`, from `origin/master`, no `feature/` prefix |
 | `/omh-commit` | Staging → commit | `<type>(<scope>): <subject>` ≤50 chars, body 72 wrap, auto `Refs: KEY` |
+| `/omh-squash` | Before opening PR (clean history) | Squash branch commits since merge-base into 1; preserves co-authors; reset --soft based |
 | `/omh-sync-master` | Branch falls behind master | Rebase (single-dev) or merge (multi-dev) per §16 |
 | `/omh-open-pr` | Ready for review | All 8 required fields, rebase check, risk inference |
 | `/omh-check-pr` | Before merge (audit) | Read-only scorecard of §13 + §15 compliance |
