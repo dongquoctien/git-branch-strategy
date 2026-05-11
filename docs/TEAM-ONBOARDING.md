@@ -47,7 +47,7 @@ After install, reload plugins (or restart Claude Code):
 /reload-plugins
 ```
 
-Verify the 11 commands are available — type `/omh-` and autocomplete should list them.
+Verify the 19 commands are available — type `/omh-` and autocomplete should list them.
 
 ---
 
@@ -155,7 +155,7 @@ That covers **95% of daily work**. The other 13 commands are situational (releas
 
 ---
 
-## 7. Full cheatsheet — all 18 commands
+## 7. Full cheatsheet — all 19 commands
 
 ### Daily work (everyone)
 
@@ -166,7 +166,8 @@ That covers **95% of daily work**. The other 13 commands are situational (releas
 | `/omh-commit` | Staging → commit | `<type>(<scope>): <subject>` ≤50 chars, body 72 wrap, auto `Refs: KEY` |
 | `/omh-squash` | Before opening PR (clean history) | Squash branch commits since merge-base into 1; preserves co-authors; reset --soft based |
 | `/omh-sync-master` | Branch falls behind master | Rebase (single-dev) or merge (multi-dev) per §16 |
-| `/omh-open-pr` | Ready for review | All 8 required fields, rebase check, risk inference |
+| `/omh-open-pr` | Ready for review (target = master) | §15 standard flow: 2 approvals incl. Tech Lead, rebase strict |
+| `/omh-open-pr-to <target>` | PR to a non-master branch | staging (§8/§9 confirm) or sub-branch → work branch (§6 step 2); refuses develop/release/* |
 | `/omh-check-pr` | Before merge (audit) | Read-only scorecard of §13 + §15 compliance |
 | `/omh-fix-pr` | Before merge (actionable) | Walk through blockers, offer fix for each |
 | `/omh-ci-status` | After push | Check CI gates per §15 — Build, Tests, Lint, Sonar, AI review |
