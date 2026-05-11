@@ -37,7 +37,7 @@ And it explicitly **refuses** the forbidden targets (`develop`, `release/*`) wit
 | Test evidence | Always | Screenshots, test output, or manual steps |
 | Risk level | Always | Low / Medium / High |
 | Jira ticket(s) | Always | Linked ticket — PR blocks without it |
-| Rebase confirmation | Always | Branch rebased onto **the target** (not always master) |
+| Rebase confirmation | Always | Branch rebased onto **master** (§3/§6 — work branches stay master-based, never rebased onto target) |
 | Promotion path | Opt-in | Per §4 — helps reviewer place the PR in the release chain |
 | Rollback plan | High risk only | Required when risk = High |
 | Migration notes | DB/infra only | For schema/index/infra changes |
@@ -51,6 +51,41 @@ And it explicitly **refuses** the forbidden targets (`develop`, `release/*`) wit
 | work branch (sub-branch → main work branch, §6 step 2) | Team norm (not strategy-mandated) |
 
 **Hard gates before merge** still apply per §15: Build, Unit tests (≥70%), Lint, SonarQube — regardless of target.
+
+---
+
+## Want to test your branch on develop or staging env? (§6, §8)
+
+A common ask: *"My branch was cut from master, I just want to deploy it to the develop/staging env to test."* The strategy doc handles this via **direct merge into the throwaway branch**, not via PR. The key insight: your branch stays clean — only the throwaway branch (`develop` / `staging`) gets the merged code, and it will be reset back to master at the next deploy cycle (§6, §8). Your work branch is untouched.
+
+### Test on develop (§6 — no PR required)
+
+```bash
+# Your work branch (cut from master) stays untouched.
+# develop is throwaway — merge your branch INTO develop, never the other way.
+git checkout develop
+git fetch origin
+git reset --hard origin/develop          # if local develop is stale
+git merge --no-ff <your-branch>          # merge your work into develop
+git push origin develop                   # deploys to develop env
+git checkout <your-branch>                # back to your branch, unchanged
+```
+
+If multiple devs are doing this concurrently and develop drifts, Tech Lead resets develop via `/omh-reset-develop` (§6). No back-merge is needed because develop syncs to master via periodic reset (§3).
+
+### Test on staging — pre-release feature test (§8.1)
+
+This is where `/omh-open-pr-to staging` IS the right command: a single feature gets tested on staging via PR. Source = your `{JIRA-KEY}-*` branch (master-based, never rebased onto staging). Approval: 1 (QA or Tech Lead).
+
+### Why never rebase your branch onto develop/staging
+
+Your branch was cut from master and must STAY master-based. Rebasing it onto `develop` (which contains 30 other devs' WIP that hasn't reached master) pulls all that code into your branch:
+
+- Your branch is no longer "independently deployable" (§3 broken)
+- You inherit conflicts that aren't yours
+- Landing your branch on master later would drag develop's code along — that's a `develop → master` reverse merge, **forbidden by §3**
+
+The throwaway-branch model exists exactly so you can deploy-to-test without contaminating your source.
 
 ---
 
@@ -89,7 +124,7 @@ AskUserQuestion:
 | Target value | Action |
 |---|---|
 | `master` | **Redirect.** Print: *"Target `master` is the §15 standard flow — use `/omh-open-pr` instead. Exiting."* Stop. |
-| `develop` | **Refuse (§6).** Print: *"§6: `develop` is throwaway. No PR required — direct merge. Run: `git checkout develop && git fetch origin && git merge <branch> && git push origin develop`."* Stop. |
+| `develop` | **Refuse (§6).** Print the test-on-develop block from the section below. Stop. |
 | `release/*` (matches `release/v*`) | **Refuse + delegate (§9).** Print: *"§9 upstream-first: never PR into a release branch. Land the fix on master first via `/omh-open-pr`, then cherry-pick to release via `/omh-cherry-pick`."* Stop. |
 | `staging` | Continue to Step 2 (staging-specific). |
 | Anything else | Treat as **work branch target** — continue to Step 2 (work-branch path). If name doesn't match `{JIRA-KEY}-*`, warn but continue. |
@@ -164,17 +199,30 @@ AskUserQuestion:
 
 If user picks **Cross-feature dependency**, print: *"Heads-up: PR'ing between two unrelated work branches makes both harder to rebase onto master. Per §6, consider merging A to master first, then rebasing B."* and ask once more to proceed or cancel.
 
-### Step 4 — Verify rebase status against the TARGET
+### Step 4 — Verify source is up-to-date with MASTER (not the PR target)
+
+**Critical rule (§3, §6):** the source branch was cut from master and must stay master-based. Rebasing source onto `develop`, `staging`, or another work branch would pollute it with code that hasn't reached master yet — breaking §3 "each feature independently deployable" and §6 "rebase onto latest master, then open PR". Reverse merges (`develop → master`, `staging → master`) are forbidden by §3.
+
+So the rebase check runs against **`origin/master`**, regardless of PR target:
+
+```bash
+git fetch origin master
+git rev-list --count HEAD..origin/master
+```
+
+- If count > 0 → source is behind master. **Stop**: *"Source is N commits behind master. Rebase first: `git rebase origin/master`, resolve conflicts, then re-run. Per §3/§6, work branches stay master-based — never rebase onto a non-master target."*
+- Do NOT auto-rebase (per CLAUDE.md "No silent auto-fixes").
+
+**Mergeability check against the target** (informational, not a hard stop):
 
 ```bash
 git fetch origin <target>
-git rev-list --count HEAD..origin/<target>
+git merge-tree --write-tree --merge-base=$(git merge-base HEAD origin/<target>) HEAD origin/<target> >/dev/null 2>&1
 ```
 
-- If count > 0 → branch is behind target. **Stop**: *"Branch is N commits behind `<target>`. Rebase first: `git rebase origin/<target>`, resolve conflicts, then re-run."*
-- Do NOT auto-rebase (may have conflicts; see CLAUDE.md "No silent auto-fixes").
+If `git merge-tree` reports conflicts, surface them as a warning in the preview block (Step 7) — but do NOT force the user to resolve them by rebasing source onto target. Reviewers / GitHub UI / target maintainer will surface conflicts on merge.
 
-Note: rebase target is the **PR target**, not master. A sub-branch PR'ing into a work branch should be rebased onto that work branch — not master.
+> **Why not rebase source onto target?** Example: your branch is `ELS-234-add-dark-mode`, cut from master. Target = `develop`, which contains 30 other devs' in-progress work that hasn't reached master. Rebasing your branch onto `develop` would pull all that code into your branch — your branch is no longer "sourced from master", you inherit conflicts that aren't yours, and you can't later land it on master without dragging develop's code along (a forbidden reverse merge per §3).
 
 ### Step 5 — Fetch Jira ticket details
 
@@ -272,12 +320,13 @@ Auto-suggest rules (per §4 release diagram):
 Print a readable preview block:
 ```
 ──────────────────────────────────────
-Title:   <title>
-Source:  <source-branch>
-Target:  <target>
-Mode:    <staging-feature-test | staging-deploy-verify | sub-branch | cross-feature>
-Risk:    <Low|Medium|High>
-Approval:<computed approval line>
+Title:     <title>
+Source:    <source-branch>  (rebased on master: ✅ | ❌ behind by N)
+Target:    <target>
+Mode:      <staging-feature-test | staging-deploy-verify | sub-branch | cross-feature>
+Mergeable: <clean | conflicts in N files — surfaced by GitHub on merge>
+Risk:      <Low|Medium|High>
+Approval:  <computed approval line>
 ──────────────────────────────────────
 <body preview>
 ──────────────────────────────────────
@@ -321,7 +370,7 @@ Body template (variant fields included only when applicable):
 <Low | Medium | High> — <justification>
 
 ## Rebase confirmation
-✅ Branch rebased onto latest `<target>` as of <YYYY-MM-DD>
+✅ Branch rebased onto latest `master` as of <YYYY-MM-DD> (per §3/§6 — source stays master-based regardless of PR target)
 
 <!-- Opt-in §4 -->
 ## Promotion path
@@ -414,7 +463,8 @@ Output:
 - Do NOT open PR targeting `release/*` (§9 — use `/omh-cherry-pick` upstream-first)
 - Do NOT open PR targeting `master` — redirect to `/omh-open-pr` (§15 standard flow)
 - Do NOT open PR FROM `master` / `develop` / `staging` / `release/*` as source (those are throwaway / release-only)
-- Do NOT bypass the rebase check against the **target**
+- Do NOT rebase the source branch onto the **target** — source stays master-based per §3/§6 (rebasing onto `develop`/`staging`/another work branch pollutes the source with un-merged code and breaks "independently deployable")
+- Do NOT bypass the rebase check against **master**
 - Do NOT auto-rebase or auto-resolve conflicts (per CLAUDE.md "No silent auto-fixes")
 - Do NOT fabricate test evidence — flag as pending if missing
 - Do NOT use `--force` (use `--force-with-lease` if explicitly asked), `--no-verify`, or `--amend` unless user requests explicitly
@@ -427,6 +477,7 @@ Output:
 - Does not cherry-pick — that's `/omh-cherry-pick` (§9 upstream-first)
 - Does not reset staging — that's `/omh-reset-staging` (§8)
 - Does not promote `develop → staging → master` automatically — that's the release flow via `/omh-release`
-- Does not auto-rebase the source onto the target — user resolves conflicts manually
+- Does not rebase source onto target — per §3/§6 source stays master-based; rebase only against `origin/master`
+- Does not auto-rebase or auto-resolve conflicts — user resolves manually if mergeability check flags conflicts
 - Does not run CI locally — CI runs on the remote after push
 - Does not approve or merge — that's reviewer + (where required) Tech Lead
