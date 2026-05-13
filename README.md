@@ -1,7 +1,5 @@
 # Git Branch Strategy
 
-# Git Branch Strategy
-
 ## 1. Overview
 
 The Git strategy is designed to support a structured workflow across Development, Staging, and Production environments. It ensures code stability, controlled releases, and efficient collaboration among development, QA, and DevOps teams.
