@@ -1,91 +1,50 @@
-# Open Pull Request to a Specified Branch (OMH Git Strategy §6, §8, §9, §13)
+# Open Pull Request to a Specified Branch (escape hatch, off-workflow)
 
 **Usage**: `/omh-open-pr-to <target-branch>`
 
 Examples:
-- `/omh-open-pr-to staging` — PR into staging (skill asks for the §8/§9 purpose)
-- `/omh-open-pr-to ELS-234-add-dark-mode` — PR from a personal sub-branch into the ticket's main work branch (§6 step 2)
-- `/omh-open-pr-to develop` — refused (§6: direct merge, no PR)
-- `/omh-open-pr-to release/v1.4.0-payment` — refused (§9: use `/omh-cherry-pick`)
-- `/omh-open-pr-to master` — redirects to `/omh-open-pr` (§15 standard flow)
+- `/omh-open-pr-to develop` — direct PR into develop (off-workflow shortcut)
+- `/omh-open-pr-to staging` — direct PR into staging
+- `/omh-open-pr-to release/v1.4.0-payment` — direct PR into a release branch
+- `/omh-open-pr-to ELS-234-add-dark-mode` — PR into another work branch
+- `/omh-open-pr-to master` — refused, redirects to `/omh-open-pr`
 
 Parse arguments from: $ARGUMENTS
 - Required: target branch. If omitted → `AskUserQuestion` to pick.
 
 ---
 
-## Why this skill exists (vs `/omh-open-pr`)
+## Scope — this skill is OFF the standard workflow
 
-`/omh-open-pr` is the **standard §15 flow**: work-branch → master, 2 approvals incl. Tech Lead, rebase strict. This skill handles **every other valid PR target** that the strategy doc allows but `/omh-open-pr` refuses:
+This skill is an **escape hatch**. It does not enforce the Git Branch Strategy. It exists for ad-hoc situations where an engineer needs to open a PR into a non-master branch and the standard skills (`/omh-open-pr`, `/omh-cherry-pick`, `/omh-release`, the throwaway-branch merges in §6/§8) don't fit.
 
-- `staging` (pre-release feature test §8.1, or final deploy verification §8.2)
-- another work branch (sub-branch → ticket's main work branch, §6 step 2)
+What this means:
 
-And it explicitly **refuses** the forbidden targets (`develop`, `release/*`) with a pointer to the correct skill, so engineers don't bypass the strategy by accident.
+- **The only forbidden target is `master`** — that flow lives in `/omh-open-pr` and must stay there (§15).
+- **All other targets are allowed**: `develop`, `staging`, `release/*`, hotfix/*, another work branch, anything.
+- **No rebase. No reset.** The source branch is **not** rebased onto the target and is **not** reset to match the target. The whole point is to preserve the source so it can later be PR'd onto master via `/omh-open-pr`.
+- **No §13 PR body template.** Title and body come straight from the commit(s) the user selects — same content as the commit.
+- **No Jira lookup, no auto-link.** This is a thin wrapper around the host's PR-create API.
 
----
+If you want strategy-enforced flows, use the right skill instead:
 
-## Rules (from README §6 develop, §8 staging, §9 bugfix-during-release, §13 PR Standards)
-
-**PR body fields are MANDATORY (§13) for every target. Reviewers must reject PRs missing any field.**
-
-| Field | Required | Notes |
-|---|---|---|
-| Title | Always | Conventional: `<type>(scope): description` |
-| Summary | Always | 2–5 sentences, what + WHY (not how) |
-| Changed files / components | Always | Group by service/module |
-| Test evidence | Always | Screenshots, test output, or manual steps |
-| Risk level | Always | Low / Medium / High |
-| Jira ticket(s) | Always | Linked ticket — PR blocks without it |
-| Rebase confirmation | Always | Branch rebased onto **master** (§3/§6 — work branches stay master-based, never rebased onto target) |
-| Promotion path | Opt-in | Per §4 — helps reviewer place the PR in the release chain |
-| Rollback plan | High risk only | Required when risk = High |
-| Migration notes | DB/infra only | For schema/index/infra changes |
-
-**Approval requirement is computed per target** (no hard-coded "2 + Tech Lead" for non-master):
-
-| Target | Approvals |
+| Goal | Use |
 |---|---|
-| `staging` — pre-release feature test (§8.1) | 1 approval (QA or Tech Lead) |
-| `staging` — final deploy verification (§8.2) | Tech Lead sign-off |
-| work branch (sub-branch → main work branch, §6 step 2) | Team norm (not strategy-mandated) |
+| PR onto master | `/omh-open-pr` (§15) |
+| Bug into a release branch | `/omh-cherry-pick` (§9 upstream-first) |
+| Cut a release | `/omh-release` (§7) |
+| Hotfix from prod tag | `/omh-hotfix` (§10) |
+| Test feature on develop without a PR | `git merge` into develop directly (§6) |
 
-**Hard gates before merge** still apply per §15: Build, Unit tests (≥70%), Lint, SonarQube — regardless of target.
+`/omh-open-pr-to` is for everything else.
 
 ---
 
-## Want to test your branch on develop or staging env? (§6, §8)
+## Why source is never rebased/reset onto target
 
-A common ask: *"My branch was cut from master, I just want to deploy it to the develop/staging env to test."* The strategy doc handles this via **direct merge into the throwaway branch**, not via PR. The key insight: your branch stays clean — only the throwaway branch (`develop` / `staging`) gets the merged code, and it will be reset back to master at the next deploy cycle (§6, §8). Your work branch is untouched.
+The source branch was cut from master. The user will eventually PR it onto master via `/omh-open-pr`. If this skill rebased source onto `develop`, `staging`, or `release/*`, source would absorb code that hasn't reached master yet — that code would then ride along to master at PR time, which the strategy forbids.
 
-### Test on develop (§6 — no PR required)
-
-```bash
-# Your work branch (cut from master) stays untouched.
-# develop is throwaway — merge your branch INTO develop, never the other way.
-git checkout develop
-git fetch origin
-git reset --hard origin/develop          # if local develop is stale
-git merge --no-ff <your-branch>          # merge your work into develop
-git push origin develop                   # deploys to develop env
-git checkout <your-branch>                # back to your branch, unchanged
-```
-
-If multiple devs are doing this concurrently and develop drifts, Tech Lead resets develop via `/omh-reset-develop` (§6). No back-merge is needed because develop syncs to master via periodic reset (§3).
-
-### Test on staging — pre-release feature test (§8.1)
-
-This is where `/omh-open-pr-to staging` IS the right command: a single feature gets tested on staging via PR. Source = your `{JIRA-KEY}-*` branch (master-based, never rebased onto staging). Approval: 1 (QA or Tech Lead).
-
-### Why never rebase your branch onto develop/staging
-
-Your branch was cut from master and must STAY master-based. Rebasing it onto `develop` (which contains 30 other devs' WIP that hasn't reached master) pulls all that code into your branch:
-
-- Your branch is no longer "independently deployable" (§3 broken)
-- You inherit conflicts that aren't yours
-- Landing your branch on master later would drag develop's code along — that's a `develop → master` reverse merge, **forbidden by §3**
-
-The throwaway-branch model exists exactly so you can deploy-to-test without contaminating your source.
+So this skill keeps the source branch exactly as the user left it. Conflicts with the target (if any) are surfaced as informational warnings; the user / reviewer / target maintainer resolves them on the host side. The skill never rewrites source history.
 
 ---
 
@@ -114,289 +73,120 @@ AskUserQuestion:
   header:   "Target"
   multiSelect: false
   options:
-    - "staging" (Recommended) — description: "PR into staging — skill will ask the §8/§9 purpose"
-    - "Another work branch" — description: "Sub-branch → ticket's main work branch (§6 step 2)"
+    - "develop" (Recommended) — description: "PR into develop"
+    - "staging" — description: "PR into staging"
+    - "Another branch" — description: "Type the branch name via Other"
     - "Cancel" — description: "Exit skill"
 ```
 
-**Dispatch table — decide what to do with the target before doing anything else:**
+**Dispatch — the only hard refusal:**
 
 | Target value | Action |
 |---|---|
-| `master` | **Redirect.** Print: *"Target `master` is the §15 standard flow — use `/omh-open-pr` instead. Exiting."* Stop. |
-| `develop` | **Refuse (§6).** Print the test-on-develop block from the section below. Stop. |
-| `release/*` (matches `release/v*`) | **Refuse + delegate (§9).** Print: *"§9 upstream-first: never PR into a release branch. Land the fix on master first via `/omh-open-pr`, then cherry-pick to release via `/omh-cherry-pick`."* Stop. |
-| `staging` | Continue to Step 2 (staging-specific). |
-| Anything else | Treat as **work branch target** — continue to Step 2 (work-branch path). If name doesn't match `{JIRA-KEY}-*`, warn but continue. |
+| `master` | **Redirect.** Print: *"Target `master` is the standard flow — use `/omh-open-pr` instead. Exiting."* Stop. |
+| Anything else | Continue to Step 2. |
 
-### Step 2 — Inspect source branch state
+No other refusals. Targets like `develop`, `staging`, `release/*` are allowed — this skill is the off-workflow escape hatch.
 
-Run in parallel:
+### Step 2 — Pre-checks (minimal)
+
+Run:
 ```bash
 git branch --show-current
 git status --porcelain
+git ls-remote --exit-code --heads origin <target>
 git fetch origin <target>
 git log origin/<target>..HEAD --oneline
-git diff origin/<target>...HEAD --stat
-git rev-list --count HEAD..origin/<target>
 ```
 
-Source checks:
-- Source branch is NOT `master`, `develop`, `staging`, `release/*` — if it is, stop (per §6/§8: those are throwaway / release-only and never act as PR source)
-- Working tree is clean — if not, stop, tell user to commit first
-- Source has at least 1 commit ahead of target — if 0, stop with *"nothing to PR — `<source>` is not ahead of `<target>`"*
-- Source branch name extracted for Jira key lookup (Step 4)
+Stop conditions:
 
-### Step 3 — Validate target-specific source rules
+- **Source = `master`** — refuse: *"PR'ing FROM master is not the purpose of this skill. Cut a work branch first."* (This is the only source restriction. Source = `develop` / `staging` / `release/*` is allowed — unusual, but allowed.)
+- **Source = target** — refuse: *"Source and target are the same branch."*
+- **Working tree dirty** — refuse: *"Working tree has uncommitted changes. Commit or stash before opening PR."* Do NOT auto-stash.
+- **Target not on remote** — refuse: *"`origin/<target>` not found. Push or create it first, or check spelling."*
+- **Source has 0 commits ahead of target** — refuse: *"Nothing to PR — `<source>` is not ahead of `<target>`."*
 
-**If target = `staging`** — ask the §8/§9 purpose before going further:
+That's it. No rebase check, no master-currency check, no Jira validation.
 
-```
-AskUserQuestion:
-  question: "Target = staging. What is this PR for? (§8/§9)"
-  header:   "Staging mode"
-  multiSelect: false
-  options:
-    - "Pre-release feature test (§8.1)" (Recommended)
-        — description: "Source must be a {JIRA-KEY}-* work branch. Approval: 1 (QA or Tech Lead)."
-    - "Final deployment verification (§8.2)"
-        — description: "Source must be a release/* branch. Approval: Tech Lead sign-off."
-    - "Bugfix during release QA"
-        — description: "IRREVERSIBLE: skill will refuse. §9 upstream-first — fix on master first, then /omh-cherry-pick into release."
-    - "Cancel"
-```
+### Step 3 — Pick the commit(s) for title + body
 
-Handle the answer:
-- **Pre-release feature test** → enforce: source matches `{JIRA-KEY}-*` (the `omh-new-branch` convention). If source = `release/*` or `hotfix/*`, refuse: *"§8.1 expects a work branch. For release verification pick 'Final deployment verification' instead."*
-- **Final deployment verification** → enforce: source matches `release/v*`. If not, refuse: *"§8.2 expects a `release/*` source. Cut a release branch via `/omh-release` first."*
-- **Bugfix during release QA** → refuse with the §9 explanation and the exact command sequence:
-  ```
-  # 1. Land fix on master
-  /omh-new-branch <JIRA-KEY>
-  # (implement fix)
-  /omh-commit
-  /omh-open-pr
-  # 2. After merge, cherry-pick to release
-  /omh-cherry-pick <merge-sha> <release-branch>
-  ```
-  Stop.
-- **Cancel** → stop.
-
-**If target = a work branch** — confirm the §6 step 2 flow:
-
-```
-AskUserQuestion:
-  question: "Target = <target> (work branch). Confirm the flow?"
-  header:   "Sub-branch"
-  multiSelect: false
-  options:
-    - "Sub-branch → main work branch (§6 step 2)" (Recommended)
-        — description: "Personal sub-branch merges into the ticket's shared work branch. Approval per team norm."
-    - "Cross-feature dependency"
-        — description: "PR from feature A into feature B. Warn: increases drift risk vs master."
-    - "Cancel"
-```
-
-If user picks **Cross-feature dependency**, print: *"Heads-up: PR'ing between two unrelated work branches makes both harder to rebase onto master. Per §6, consider merging A to master first, then rebasing B."* and ask once more to proceed or cancel.
-
-### Step 4 — Verify source is up-to-date with MASTER (not the PR target)
-
-**Critical rule (§3, §6):** the source branch was cut from master and must stay master-based. Rebasing source onto `develop`, `staging`, or another work branch would pollute it with code that hasn't reached master yet — breaking §3 "each feature independently deployable" and §6 "rebase onto latest master, then open PR". Reverse merges (`develop → master`, `staging → master`) are forbidden by §3.
-
-So the rebase check runs against **`origin/master`**, regardless of PR target:
+List commits ahead of target:
 
 ```bash
-git fetch origin master
-git rev-list --count HEAD..origin/master
+git log origin/<target>..HEAD --pretty=format:"%h %s"
 ```
 
-- If count > 0 → source is behind master. **Stop**: *"Source is N commits behind master. Rebase first: `git rebase origin/master`, resolve conflicts, then re-run. Per §3/§6, work branches stay master-based — never rebase onto a non-master target."*
-- Do NOT auto-rebase (per CLAUDE.md "No silent auto-fixes").
-
-**Mergeability check against the target** (informational, not a hard stop):
-
-```bash
-git fetch origin <target>
-git merge-tree --write-tree --merge-base=$(git merge-base HEAD origin/<target>) HEAD origin/<target> >/dev/null 2>&1
-```
-
-If `git merge-tree` reports conflicts, surface them as a warning in the preview block (Step 7) — but do NOT force the user to resolve them by rebasing source onto target. Reviewers / GitHub UI / target maintainer will surface conflicts on merge.
-
-> **Why not rebase source onto target?** Example: your branch is `ELS-234-add-dark-mode`, cut from master. Target = `develop`, which contains 30 other devs' in-progress work that hasn't reached master. Rebasing your branch onto `develop` would pull all that code into your branch — your branch is no longer "sourced from master", you inherit conflicts that aren't yours, and you can't later land it on master without dragging develop's code along (a forbidden reverse merge per §3).
-
-### Step 5 — Fetch Jira ticket details
-
-Extract Jira key from source branch name (e.g. `ELS-234-add-dark-mode` → `ELS-234`).
-
-```
-mcp__mcp-atlassian__jira_get_issue(issue_key=<extracted-key>)
-```
-
-Extract:
-- Summary (for title suggestion)
-- Issue type → commit type (Bug → `fix`, Story/Task → `feat`, Improvement → `refactor`)
-- Description (for summary context)
-
-If no Jira key in source name or ticket not found → ask via `AskUserQuestion`:
-```
-question: "No Jira key in branch name. Provide one?"
-header:   "Jira"
-options:
-  - "Enter key now" (Recommended) — description: "Type via Other"
-  - "Proceed without Jira link" — description: "PR body will flag 'Jira: pending — requires manual link'"
-  - "Cancel"
-```
-
-### Step 6 — Derive PR fields
-
-**Title** — conventional commit format, same as `/omh-open-pr`:
-- Use the type of the most recent commit on source, OR derive from Jira issue type
-- Scope from §14 list (`auth`, `payment`, `search`, `booking`, `infra`, `ui`, `api`, `notification`)
-- Subject from Jira summary, imperative mood, lowercase, no trailing period
-
-**Summary** (2–5 sentences) — what + WHY, reference Jira context, do not explain how.
-
-**Changed files / components** — group by service/module, format `- <service>: <files>`.
-
-**Test evidence** (mandatory §13):
+Then ask:
 
 ```
 AskUserQuestion:
-  question: "What test evidence do you have? (mandatory per §13)"
-  header:   "Test evid"
-  multiSelect: true
-  options:
-    - "Unit test output" (Recommended) — description: "Run suite now and capture output"
-    - "CI build link" — description: "Paste URL via Other"
-    - "Manual test steps" — description: "Describe via Other"
-    - "Screenshots" — description: "Paste paths"
-```
-
-If user picks nothing / only "Other: none available" → body field becomes *"⚠️ Test evidence: pending — requires sign-off"*. Never fabricate.
-
-**Risk level** — infer a default, confirm via `AskUserQuestion`.
-
-Inference rules (different from `/omh-open-pr` because the target isn't production-path):
-- Default for `staging` (feature test) → **Low** (not on release path)
-- Default for `staging` (deploy verification) → **Medium** (this code will deploy)
-- Default for work-branch target → **Low** (still many merges away from master)
-- Auto-promote to **High** if files touch `auth/`, `payment/`, `booking/`, `*.sql`, migrations, `infra/`, CI configs, or core dep version bumps
-
-```
-AskUserQuestion:
-  question: "Confirm risk level (inferred: <X>)"
-  header:   "Risk"
-  options:
-    - "Keep inferred (<X>)" (Recommended)
-    - "Low" — description: "Isolated, single module, easily reverted"
-    - "Medium" — description: "Shared utilities, multiple modules, external deps"
-    - "High" — description: "Cross-service, DB migration, auth/payment/booking core — requires rollback plan"
-```
-
-**Rollback plan** (only if High): ask user to describe — do NOT auto-generate.
-
-**Migration notes** (DB/infra): ask for estimated run time, zero-downtime status, rollback SQL.
-
-**Promotion path** (opt-in per §4):
-
-```
-AskUserQuestion:
-  question: "Add a Promotion path field? (helps reviewer place PR in the §4 chain)"
-  header:   "Promo path"
+  question: "Which commit's content should become the PR title + body?"
+  header:   "PR source"
   multiSelect: false
   options:
-    - "Yes, auto-suggest from §4" (Recommended) — description: "Skill fills based on target type"
-    - "Yes, I'll write it" — description: "Free-text via Other"
-    - "No" — description: "Omit the field"
+    - "Latest commit (HEAD)" (Recommended) — description: "<HEAD-short-sha> <HEAD-subject>"
+    - "Pick a specific commit" — description: "List all <N> commits ahead; user picks one"
+    - "Combine all commits" — description: "Title = HEAD subject; body = concatenated subject+body of every commit ahead"
+    - "Cancel" — description: "Exit skill"
 ```
 
-Auto-suggest rules (per §4 release diagram):
-- Target = `staging` (feature test) → `<source> → staging → master → release/* → PROD`
-- Target = `staging` (deploy verification) → `release/* → staging → tag → PROD`
-- Target = work branch → `<source> → <target> → master → release/* → PROD`
+Resolve the choice:
 
-### Step 7 — Show PR preview & confirm
+- **Latest commit (HEAD)** — title = subject of HEAD; body = body of HEAD (everything after the first blank line in `git log -1 --pretty=format:%B`).
+- **Pick a specific commit** — second `AskUserQuestion` listing each commit ahead as an option (`<short-sha> <subject>`). After pick, title = subject of that commit; body = body of that commit.
+- **Combine all commits** — title = subject of HEAD; body = for each commit ahead (oldest → newest), append a block:
+  ```
+  ### <short-sha> <subject>
+  <body of that commit, or empty>
+  ```
+- **Cancel** — stop.
 
-Print a readable preview block:
+If the chosen commit has no body, body is left empty. Do NOT fabricate a summary, test plan, risk, promotion path, or any §13 field. Title + body are commit content, verbatim.
+
+### Step 4 — Show preview & confirm
+
+Print:
 ```
 ──────────────────────────────────────
-Title:     <title>
-Source:    <source-branch>  (rebased on master: ✅ | ❌ behind by N)
+Source:    <source-branch>
 Target:    <target>
-Mode:      <staging-feature-test | staging-deploy-verify | sub-branch | cross-feature>
-Mergeable: <clean | conflicts in N files — surfaced by GitHub on merge>
-Risk:      <Low|Medium|High>
-Approval:  <computed approval line>
+Commits:   <N> ahead of <target>
+Mode:      <head | picked <sha> | combined>
 ──────────────────────────────────────
-<body preview>
+Title:
+  <title>
+
+Body:
+  <body, or "(empty — chosen commit has no body)">
 ──────────────────────────────────────
 ```
 
 Then:
+
 ```
 AskUserQuestion:
   question: "Create this PR?"
   header:   "Create PR"
   options:
-    - "Create as shown" (Recommended) — description: "Push branch and open PR now"
-    - "Edit title/summary" — description: "Revise title or summary text"
-    - "Change risk or add plan" — description: "Change risk level, rollback, migration"
-    - "Toggle Promotion path" — description: "Add/remove the §4 promotion line"
+    - "Create as shown" (Recommended) — description: "Push source if needed and open PR"
+    - "Re-pick commit" — description: "Go back to Step 3"
     - "Cancel" — description: "Don't create PR"
 ```
 
-Sub-flows (looping until user picks "Create as shown" or "Cancel"):
-- **Edit title/summary** → `AskUserQuestion` `["Title", "Summary", "Both"]`, free-text via Other
-- **Change risk or add plan** → `AskUserQuestion` `["Risk level", "Rollback plan", "Migration notes", "All of these"]`
-- **Toggle Promotion path** → re-run Step 6 Promotion path prompt
-- After any edit, re-render the preview and re-ask.
+If user picks **Re-pick commit**, loop back to Step 3. After re-pick, re-render preview.
 
-Body template (variant fields included only when applicable):
-
-```markdown
-## Summary
-<2–5 sentences>
-
-## Changed files / components
-- <service>: <components>
-
-## Jira
-<JIRA-KEY>: <ticket-summary-link>
-
-## Test evidence
-<screenshots / test output / manual steps>
-
-## Risk level
-<Low | Medium | High> — <justification>
-
-## Rebase confirmation
-✅ Branch rebased onto latest `master` as of <YYYY-MM-DD> (per §3/§6 — source stays master-based regardless of PR target)
-
-<!-- Opt-in §4 -->
-## Promotion path
-<source> → <target> → ... → PROD
-
-<!-- High-risk only -->
-## Rollback plan
-<how to revert>
-
-<!-- DB/infra only -->
-## Migration notes
-- Estimated run time: <X>
-- Zero-downtime: <yes/no>
-- Rollback: <SQL or procedure>
-```
-
-### Step 8 — Push source branch
+### Step 5 — Push source branch
 
 ```bash
 git push -u origin <source-branch>
 ```
 
-- If already pushed and diverged → ask user. Do NOT auto force-push.
-- If up-to-date → skip push, proceed.
+- If already pushed and up-to-date → skip.
+- If already pushed and diverged → ask the user; do NOT auto force-push.
+- If push fails → surface the error, stop.
 
-### Step 9 — Create the PR
+### Step 6 — Create the PR
 
 Detect remote from `git remote get-url origin`:
 
@@ -420,64 +210,46 @@ EOF
 )"
 ```
 
-### Step 10 — Link PR to Jira
+If body is empty, pass an empty string — do not fabricate content.
 
-```
-mcp__mcp-atlassian__jira_add_comment(
-  issue_key=<jira-key>,
-  comment="PR opened: <pr-url> (target: <target>)"
-)
-```
-
-Skip silently if Step 5 produced no Jira key.
-
-### Step 11 — Report
+### Step 7 — Report
 
 Output:
 - **Source**: `<source-branch>`
 - **Target**: `<target>`
-- **Mode**: `<staging-feature-test | staging-deploy-verify | sub-branch | cross-feature>`
+- **Mode**: `<head | picked <sha> | combined>`
 - **Title**: `<pr-title>`
-- **Risk**: Low / Medium / High
-- **Approval needed**: `<computed: 1 QA/TL | TL sign-off | team norm>`
 - **PR URL**: `<url>`
-- **CI gates**: Build, Unit tests ≥70%, Lint, SonarQube — all must pass before merge (§15)
-- **Next**: depending on mode — e.g. for staging feature test, *"After QA pass, open `/omh-open-pr` to land on master"*; for sub-branch, *"After merge, rebase sibling sub-branches"*.
+- **Note**: *"Source branch was not rebased or reset. It is still master-based and can later be PR'd to master via `/omh-open-pr`."*
 
 ---
 
 ## Error handling
 
-- **Source not pushed yet** — push first with `-u origin <source>`
-- **PR already exists for `<source>` → `<target>`** — fetch existing PR, offer to update description instead of creating new
-- **MCP Bitbucket/GitHub unavailable** — fall back to `gh` CLI (GitHub) or print body and ask user to create manually
-- **Jira ticket closed** — warn: *"Ticket `<KEY>` is Closed/Done. Should this PR still exist?"* — let user confirm
-- **Target doesn't exist on remote** — stop: *"`origin/<target>` not found. Create it first or check the spelling."*
-- **Source = target** — stop: *"Source and target are the same branch."*
+- **PR already exists for `<source>` → `<target>`** — surface the existing PR URL and offer to update the description with the new title+body. Do not open a duplicate.
+- **MCP Bitbucket / `gh` CLI unavailable** — print the title + body block and the host's create-PR URL, ask the user to paste manually.
+- **Push rejected (non-fast-forward)** — ask the user to investigate. Do NOT force-push.
 
 ---
 
 ## Hard refusals
 
-- Do NOT open PR targeting `develop` (§6 — direct merge, no PR)
-- Do NOT open PR targeting `release/*` (§9 — use `/omh-cherry-pick` upstream-first)
-- Do NOT open PR targeting `master` — redirect to `/omh-open-pr` (§15 standard flow)
-- Do NOT open PR FROM `master` / `develop` / `staging` / `release/*` as source (those are throwaway / release-only)
-- Do NOT rebase the source branch onto the **target** — source stays master-based per §3/§6 (rebasing onto `develop`/`staging`/another work branch pollutes the source with un-merged code and breaks "independently deployable")
-- Do NOT bypass the rebase check against **master**
-- Do NOT auto-rebase or auto-resolve conflicts (per CLAUDE.md "No silent auto-fixes")
-- Do NOT fabricate test evidence — flag as pending if missing
-- Do NOT use `--force` (use `--force-with-lease` if explicitly asked), `--no-verify`, or `--amend` unless user requests explicitly
+- Do NOT open PR targeting `master` — redirect to `/omh-open-pr`.
+- Do NOT open PR FROM `master` as source.
+- Do NOT rebase the source branch onto the target.
+- Do NOT reset the source branch to the target.
+- Do NOT auto-stash, auto-rebase, auto-resolve conflicts, or auto force-push.
+- Do NOT fabricate PR body content (summary, test evidence, risk, promotion path, Jira link). Body = commit content, verbatim.
+- Do NOT use `--force` (use `--force-with-lease` only if explicitly asked), `--no-verify`, or `--amend` unless the user explicitly requests it.
 
 ---
 
 ## What this skill does NOT do
 
-- Does not handle PR to master — that's `/omh-open-pr` (§15 standard flow)
-- Does not cherry-pick — that's `/omh-cherry-pick` (§9 upstream-first)
-- Does not reset staging — that's `/omh-reset-staging` (§8)
-- Does not promote `develop → staging → master` automatically — that's the release flow via `/omh-release`
-- Does not rebase source onto target — per §3/§6 source stays master-based; rebase only against `origin/master`
-- Does not auto-rebase or auto-resolve conflicts — user resolves manually if mergeability check flags conflicts
-- Does not run CI locally — CI runs on the remote after push
-- Does not approve or merge — that's reviewer + (where required) Tech Lead
+- Does not enforce §6 / §8 / §9 / §13 / §15 — use the dedicated skills for those flows.
+- Does not handle PR to master — that's `/omh-open-pr`.
+- Does not cherry-pick — that's `/omh-cherry-pick`.
+- Does not validate Jira, derive risk, suggest promotion path, or generate test evidence.
+- Does not rebase or reset source — source stays exactly as the user left it.
+- Does not run CI locally — CI runs on the host after push.
+- Does not approve, request reviewers, or merge.

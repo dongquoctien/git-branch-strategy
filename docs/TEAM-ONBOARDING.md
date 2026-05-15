@@ -170,7 +170,7 @@ That covers **95% of daily work**. The other 13 commands are situational (releas
 | `/omh-squash` | Before opening PR (clean history) | Squash branch commits since merge-base into 1; preserves co-authors; reset --soft based |
 | `/omh-sync-master` | Branch falls behind master | Rebase (single-dev) or merge (multi-dev) per §16 |
 | `/omh-open-pr` | Ready for review (target = master) | §15 standard flow: 2 approvals incl. Tech Lead, rebase strict |
-| `/omh-open-pr-to <target>` | PR to a non-master branch | staging (§8/§9 confirm) or sub-branch → work branch (§6 step 2); refuses develop/release/* |
+| `/omh-open-pr-to <target>` | Ad-hoc PR to any non-master branch (off-workflow escape hatch) | Title + body = commit content; no rebase, no reset; refuses only `master` (use `/omh-open-pr` for that) |
 | `/omh-check-pr` | Before merge (audit) | Read-only scorecard of §13 + §15 compliance |
 | `/omh-fix-pr` | Before merge (actionable) | Walk through blockers, offer fix for each |
 | `/omh-ci-status` | After push | Check CI gates per §15 — Build, Tests, Lint, Sonar, AI review |
