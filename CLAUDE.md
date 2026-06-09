@@ -5,7 +5,9 @@
 This repo is the **source of truth** for:
 
 1. The OhMyHotel **Git Branch Strategy** — a formal document (see `README.md`) defining the Throwaway-Branch workflow, PR policy, release flow, hotfix procedure, and rollback rules used across all company repos (`oh-admin`, `oh-api`, `ohmytrip-pc`, etc.).
-2. A **Claude Code plugin marketplace** (`ohmyhotel-tools`) that distributes slash commands implementing the strategy. One plugin today: `omh-git-workflow`.
+2. A **Claude Code plugin marketplace** (`ohmyhotel-tools`) that distributes slash commands implementing the company's engineering policies. Two plugins today:
+   - `omh-git-workflow` — the Git Branch Strategy (cites `README.md` §§)
+   - `omh-sla-workflow` — the SLA Policy: incident triage + Post-Incident Reviews (cites `docs/SLA-POLICY.md` §§)
 
 This repo is not an application. Do not treat it as a deployable service. Changes here affect how every engineer at OhMyHotel uses Claude Code for git operations — prioritize clarity and conservative safety defaults.
 
@@ -119,6 +121,6 @@ Explicitly **NOT** on the roadmap (rejected as out-of-scope for git-branch-strat
 
 - Do not remove rules from skills without updating `README.md` first — the doc is authoritative
 - Do not add skills that bypass CI gates, PR approvals, or Tech Lead involvement (per §15)
-- Do not add skills that don't map to a specific `§` section — plugin scope is strictly the git-branch-strategy doc
+- Do not add skills that don't map to a specific `§` section of their plugin's source-of-truth doc — `omh-git-workflow` skills map to `README.md`; `omh-sla-workflow` skills map to `docs/SLA-POLICY.md`. A skill that fits neither doc needs a new plugin (or a doc change first).
 - Do not commit real Jira keys, PR numbers, or internal URLs as examples — use placeholders like `ELS-123`, `OMH-4857`
 - Do not store secrets in plugin files (they are git-tracked and distributed to every engineer)

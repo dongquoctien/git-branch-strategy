@@ -42,12 +42,17 @@ You should see `ohmyhotel-tools` in the list.
 /plugin install omh-git-workflow@ohmyhotel-tools
 ```
 
+The marketplace also ships **`omh-sla-workflow`** (incident management + Post-Incident Reviews). Install it too if you handle incidents/PIRs:
+```
+/plugin install omh-sla-workflow@ohmyhotel-tools
+```
+
 After install, reload plugins (or restart Claude Code):
 ```
 /reload-plugins
 ```
 
-Verify the 21 commands are available — type `/omh-` and autocomplete should list them.
+Verify the 21 git commands are available — type `/omh-` and autocomplete should list them. If you installed the SLA plugin, you'll also see the 5 incident/PIR commands (`/omh-incident-triage`, `/omh-create-pir`, `/omh-review-pir`, `/omh-pir-action-items`, `/omh-sla-report`).
 
 ---
 
@@ -199,6 +204,20 @@ That covers **95% of daily work**. The other 13 commands are situational (releas
 |---|---|---|
 | `/omh-hotfix <JIRA-KEY>` | Urgent prod fix | Branch from prod TAG, upstream-first, emergency release |
 | `/omh-rollback [target-tag]` | §20 trigger fires within 30 min of deploy | Prefer pipeline re-trigger; fallback revert+re-tag |
+
+### SLA & incidents (omh-sla-workflow plugin)
+
+Cites the [SLA Policy](SLA-POLICY.md), not the git strategy. Install `omh-sla-workflow@ohmyhotel-tools` separately.
+
+| Command | When | Key rules |
+|---|---|---|
+| `/omh-incident-triage` | Incident detected | Assign P0–P3 (§2), compute SLA response/resolution deadlines (§3), start timeline + P0 protocol (§7) |
+| `/omh-create-pir <incident-key>` | After P0 / major P1 resolved | Scaffold review-ready PIR: 4-timestamp detection, 5-Whys, quantified impact; attach to ticket (no personal drive) (§7.5) |
+| `/omh-pir-action-items <pir-key>` | After drafting the PIR | Turn each action item into a linked Jira ticket with a committed ETA — the step reviewers always demand (§7.5.1 #3) |
+| `/omh-review-pir <pir-key>` | Before requesting sign-off | Read-only 12-gate audit against recurring reviewer failures; PASS/FAIL scorecard (§7.5.1) |
+| `/omh-sla-report [YYYY-MM]` | Monthly (Dev Manager) | Draft the §17 Monthly SLA Report: incident/MTTR/compliance roll-up from Jira; monitoring metrics flagged for fill-in |
+
+**PIR lifecycle:** `incident → triage → (resolve) → create-pir → pir-action-items → review-pir → Part Lead + Dev Manager sign-off`. PIR must be closed within **1 business day** of resolution (§7.5).
 
 ---
 
