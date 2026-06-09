@@ -33,8 +33,6 @@ Turns the prevention/action-item table inside a PIR into **real, linked Jira tic
 
 `jira_get_issue(issue_key=pir_key, fields="*all", comment_limit=50)`. Locate the PIR `.md` (attachment preferred, else inline). Parse the **Prevention / Action Items** table into rows: `{n, action, owner, priority, eta, status, validation, existing_jira}`.
 
-When parsing the `eta` cell: extract the first `\d{4}-\d{2}-\d{2}` date if the cell wraps the date in justification prose (e.g. *"Due to this take time for test so setup ETA to 2026-06-02"* → `2026-06-02`). Use the extracted date as the due date, but **flag the cell as needing cleanup** (the doc should hold a bare date per §7.5.1 #2) so it surfaces in the report. Only treat an ETA as missing/`TBD` when no parseable date exists at all.
-
 - If no action-item table is found → stop: *"No action-item table in <pir_key>. Add one via /omh-create-pir, then re-run."*
 - Cross-check existing `Relates` links: if an action item already has a linked ticket, mark it **already created** and exclude from the create set (idempotent — safe to re-run).
 
