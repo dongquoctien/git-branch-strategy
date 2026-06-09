@@ -19,10 +19,10 @@ The PIR must satisfy ALL of these. Each maps to a real recurring review failure:
 |---|---|---|---|
 | G1 | **Required sections present** | Missing Timeline / Detection / Root cause / Impact / Detection gap / Prevention / Sign-off | §7.5 |
 | G2 | **4 detection timestamps** | Single vague MTTD; Event/Alert/Ack/Response-Start not all present | §7.5.1 |
-| G3 | **MTTD & MTTA computed separately** | MTTD and MTTA conflated; gap (e.g. 5 min) not attributed to alert-latency vs response-latency | §7.5.1, §10 |
+| G3 | **MTTD & MTTA computed separately + consistent** | MTTD and MTTA conflated; gap (e.g. 5 min) not attributed to alert-latency vs response-latency; OR MTTD/MTTA quoted with **different values in different sections** | §7.5.1, §10 |
 | G4 | **5-Whys ≥ 3 levels** | Root cause is 1 line / 1 level; no causal chain | §7.5 |
 | G5 | **Impact quantified** | "performance degraded" with no users %, no revenue estimate, no duration | §7.5.1 #5 |
-| G6 | **Action items have ETA + Status** | Any `ETA = TBD`, especially on `Critical` items; missing Status | §7.5.1 #2 |
+| G6 | **Action items have ETA + Status** | Any `ETA = TBD`, especially on `Critical` items; missing Status; OR an ETA that is not an explicit `YYYY-MM-DD` date in its own column (prose/range/justification text instead) | §7.5.1 #2 |
 | G7 | **Action items are linked Jira tickets** | Items exist only as prose in the doc; no `Relates` links | §7.5.1 #3 |
 | G8 | **Storage on the ticket, not personal drive** | PIR shared via personal SharePoint/OneDrive link | §7.5.1 #1 |
 | G9 | **Correct role names** | "Engineering Manager"/"Tech Lead" instead of Part Lead / Dev Manager | §7.5.1 #4, §15 |
@@ -51,8 +51,8 @@ The PIR must satisfy ALL of these. Each maps to a real recurring review failure:
 
 For each gate G1–G12, classify PASS / FAIL / N/A and capture a one-line, specific reason quoting the offending text where possible. Specific guidance:
 
-- **G2/G3**: confirm all 4 timestamps are real values; confirm MTTD and MTTA are stated as separate numbers with the correct formulas. If a single "MTTD ~0–5 min" appears without the breakdown → FAIL with the exact reviewer ask: *"clarify whether the gap reflects alert latency (MTTD) or post-ack response latency (MTTA)."*
-- **G6**: scan the action-item table; any `TBD`/blank ETA → FAIL, and call out Critical items by name.
+- **G2/G3**: confirm all 4 timestamps are real values; confirm MTTD and MTTA are stated as separate numbers with the correct formulas. If a single "MTTD ~0–5 min" appears without the breakdown → FAIL with the exact reviewer ask: *"clarify whether the gap reflects alert latency (MTTD) or post-ack response latency (MTTA)."* Also FAIL if MTTD (or MTTA) is quoted in more than one place with **different values** (e.g. "~2 min" in the summary but "~0–5 minutes" in the Detection section) — call out the conflicting locations; each metric must read as one consistent value document-wide.
+- **G6**: scan the action-item table; any `TBD`/blank ETA → FAIL, and call out Critical items by name. Also FAIL if an ETA cell is not a clean `YYYY-MM-DD` date — e.g. a range, or a date buried in justification prose like *"Due to this take time for test so setup ETA to 2026-06-02"*. Quote the offending cell and note the date must sit alone in its own column.
 - **G7**: cross-check each action item in the doc against the ticket's `Relates` links. Items with no corresponding Jira ticket → FAIL, list them. (Fix path = `/omh-pir-action-items`.)
 - **G8**: search description + comments for `sharepoint.com`, `onedrive`, `personal`, `drive.google` → FAIL if the PIR lives there instead of an attachment.
 - **G9**: grep for disallowed role strings.

@@ -98,7 +98,7 @@ Flow: `Engineer writes query → Test in Staging → Part Lead review → Dev Ma
 A PIR must include:
 
 - **Timeline** — minute-by-minute from detection to resolution.
-- **Detection (4 timestamps)** — Event Time, Alert Time, Acknowledged Time, Response Start Time. Compute **MTTD = Event→Alert** and **MTTA = Alert→Ack** separately, so monitoring gaps and operational gaps are analyzed independently. Never state a single vague MTTD.
+- **Detection (4 timestamps)** — Event Time, Alert Time, Acknowledged Time, Response Start Time. Compute **MTTD = Event→Alert** and **MTTA = Alert→Ack** separately, so monitoring gaps and operational gaps are analyzed independently. Never state a single vague MTTD. **MTTD/MTTA must each appear as one consistent value across the whole document** — the same number wherever quoted (a value in the summary that disagrees with the Detection section is a defect to fix).
 - **Root cause** — 5-Whys analysis, **minimum 3 levels deep**.
 - **Impact** — users affected (count / %), revenue impact estimate (quantified, not vague), total duration.
 - **Detection gap** — how it was found, why automated detection did not catch it sooner.
@@ -112,7 +112,7 @@ A PIR must include:
 These are recurring review failures. A PIR is **not review-ready** until all pass:
 
 1. **Storage** — the PIR `.md` is **attached directly to the Jira ticket** (or shared channel). **Never** a personal SharePoint/OneDrive link — those break when people leave or permissions change. A PIR is an organizational asset.
-2. **Action-item ETA + status** — every action item has a committed ETA (weekly granularity minimum) and a Status. **No `ETA = TBD`**, especially for `Critical` items. Each item maps explicitly to a Validation Criterion.
+2. **Action-item ETA + status** — every action item has a committed ETA (weekly granularity minimum) and a Status. The ETA must be an **explicit calendar date** (`YYYY-MM-DD`) in its own column — not prose, not a range, not justification text wrapped around the date. **No `ETA = TBD`**, especially for `Critical` items. Each item maps explicitly to a Validation Criterion.
 3. **Action-item Jira tickets** — every action item is a real Jira ticket, linked to the PIR via `Relates`. No action items left as prose only.
 4. **Roles** — use exactly **Part Lead** and **Dev Manager** (not "Engineering Manager", "Tech Lead", etc.).
 5. **Quantified impact** — revenue, % users, and duration are numbers, not adjectives.
