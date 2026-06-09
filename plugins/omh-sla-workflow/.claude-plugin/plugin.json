@@ -1,0 +1,22 @@
+{
+  "name": "omh-sla-workflow",
+  "version": "1.0.0",
+  "description": "OhMyHotel SLA & Incident Management — slash commands that enforce the company SLA Policy: incident triage (P0–P3), Post-Incident Reviews (PIR), action-item tracking, and the monthly SLA report. Based on the internal SLA Policy document (§2–§18).",
+  "author": {
+    "name": "OhMyHotel DevTools",
+    "email": "devtools@ohmyhotel.com"
+  },
+  "homepage": "https://github.com/dongquoctien/git-branch-strategy",
+  "repository": "https://github.com/dongquoctien/git-branch-strategy",
+  "license": "UNLICENSED",
+  "keywords": [
+    "sla",
+    "incident",
+    "pir",
+    "post-incident-review",
+    "postmortem",
+    "on-call",
+    "jira",
+    "ohmyhotel"
+  ]
+}

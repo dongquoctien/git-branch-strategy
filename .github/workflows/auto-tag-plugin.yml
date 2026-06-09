@@ -1,13 +1,19 @@
 name: Auto-tag plugin version
 
-# Automatically creates and pushes a git tag matching the version in
-# plugin.json whenever that version changes on master. Claude Code
-# uses the git tag to decide whether to offer plugin updates to
-# installed users — so a missed tag means users stay on the stale
-# cached version (see CLAUDE.md SemVer rules).
+# Automatically creates and pushes a git tag for EACH plugin whenever its
+# version changes on master. Claude Code uses git tags to decide whether to
+# offer plugin updates — a missed tag means users stay on the stale cached
+# version (see CLAUDE.md SemVer rules).
 #
-# Trigger: any push to master (typically via merged PR).
-# Skip conditions: version unchanged, or tag already exists.
+# Tag scheme (multi-plugin):
+#   - omh-git-workflow keeps the historical bare scheme:  v<version>   (e.g. v2.0.0)
+#     (preserves all existing v1.x / v2.x tags — do NOT rename them)
+#   - every other plugin is namespaced:  <plugin-name>-v<version>      (e.g. omh-sla-workflow-v1.0.0)
+#
+# For each plugin it verifies plugin.json version == its marketplace entry,
+# then tags if that tag doesn't already exist. Refuses to move an existing tag.
+#
+# Trigger: any push to master that touches a manifest (typically a merged PR).
 
 on:
   push:
@@ -28,83 +34,68 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Read plugin version
-        id: version
-        run: |
-          VERSION=$(jq -r '.version' plugins/omh-git-workflow/.claude-plugin/plugin.json)
-          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
-            echo "::error::Could not read version from plugin.json"
-            exit 1
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Plugin version: $VERSION"
-
-      - name: Read marketplace version
-        id: mkt_version
-        run: |
-          MKT_VERSION=$(jq -r '.plugins[0].version' .claude-plugin/marketplace.json)
-          echo "version=$MKT_VERSION" >> $GITHUB_OUTPUT
-          echo "Marketplace version: $MKT_VERSION"
-
-      - name: Verify versions match
-        run: |
-          PLUGIN_V="${{ steps.version.outputs.version }}"
-          MKT_V="${{ steps.mkt_version.outputs.version }}"
-          if [ "$PLUGIN_V" != "$MKT_V" ]; then
-            echo "::error::Version mismatch — plugin.json=$PLUGIN_V, marketplace.json=$MKT_V. Keep them in sync per CLAUDE.md."
-            exit 1
-          fi
-          echo "Versions match: $PLUGIN_V"
-
-      - name: Check if tag exists
-        id: check_tag
-        run: |
-          TAG="v${{ steps.version.outputs.version }}"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            EXISTING_SHA=$(git rev-list -n 1 "$TAG")
-            CURRENT_SHA="${{ github.sha }}"
-            if [ "$EXISTING_SHA" = "$CURRENT_SHA" ]; then
-              echo "exists_at_head=true" >> $GITHUB_OUTPUT
-              echo "Tag $TAG already exists at current commit — nothing to do"
-            else
-              echo "exists_elsewhere=true" >> $GITHUB_OUTPUT
-              echo "::warning::Tag $TAG exists at $EXISTING_SHA but master HEAD is $CURRENT_SHA. Refusing to move tag — bump version first."
-              exit 1
-            fi
-          else
-            echo "exists_at_head=false" >> $GITHUB_OUTPUT
-            echo "exists_elsewhere=false" >> $GITHUB_OUTPUT
-            echo "Tag $TAG does not exist — will create"
-          fi
-
       - name: Configure git identity
-        if: steps.check_tag.outputs.exists_at_head == 'false'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Create and push tag
-        if: steps.check_tag.outputs.exists_at_head == 'false'
+      - name: Tag each plugin whose version changed
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          SHA: ${{ github.sha }}
         run: |
-          TAG="v$VERSION"
-          MESSAGE="Release $TAG: auto-tagged from plugin.json"
-          git tag -a "$TAG" -m "$MESSAGE"
-          git push origin "$TAG"
-          echo "::notice::Pushed new tag $TAG at ${{ github.sha }}"
+          set -euo pipefail
+          MKT=.claude-plugin/marketplace.json
+          PLUGIN_COUNT=$(jq -r '.plugins | length' "$MKT")
+          CREATED=()
+          SKIPPED=()
 
-      - name: Summary
-        if: always()
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
+          for i in $(seq 0 $((PLUGIN_COUNT - 1))); do
+            NAME=$(jq -r ".plugins[$i].name" "$MKT")
+            SOURCE=$(jq -r ".plugins[$i].source" "$MKT")
+            MKT_VER=$(jq -r ".plugins[$i].version" "$MKT")
+            PLUGIN_JSON="${SOURCE#./}/.claude-plugin/plugin.json"
+
+            if [ ! -f "$PLUGIN_JSON" ]; then
+              echo "::error::$NAME: no plugin.json at $PLUGIN_JSON"
+              exit 1
+            fi
+            PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON")
+
+            if [ "$PLUGIN_VER" != "$MKT_VER" ]; then
+              echo "::error::$NAME version mismatch — plugin.json=$PLUGIN_VER, marketplace=$MKT_VER. Keep in sync per CLAUDE.md."
+              exit 1
+            fi
+
+            # Tag prefix: omh-git-workflow stays on the historical bare 'v' scheme.
+            if [ "$NAME" = "omh-git-workflow" ]; then
+              TAG="v$PLUGIN_VER"
+            else
+              TAG="${NAME}-v$PLUGIN_VER"
+            fi
+
+            if git rev-parse "$TAG" >/dev/null 2>&1; then
+              EXISTING_SHA=$(git rev-list -n 1 "$TAG")
+              if [ "$EXISTING_SHA" = "$SHA" ]; then
+                echo "$NAME: tag $TAG already at HEAD — nothing to do"
+                SKIPPED+=("$TAG (already at HEAD)")
+              else
+                echo "::warning::$NAME: tag $TAG exists at $EXISTING_SHA but HEAD is $SHA. Refusing to move tag — bump version first."
+                SKIPPED+=("$TAG (exists elsewhere — version not bumped)")
+              fi
+              continue
+            fi
+
+            git tag -a "$TAG" -m "Release $TAG: auto-tagged from $PLUGIN_JSON"
+            git push origin "$TAG"
+            echo "::notice::$NAME: pushed new tag $TAG at $SHA"
+            CREATED+=("$TAG")
+          done
+
           {
             echo "## Auto-tag result"
             echo ""
-            echo "| Field | Value |"
+            echo "| Plugin tag | Action |"
             echo "|---|---|"
-            echo "| Plugin version | \`$VERSION\` |"
-            echo "| Commit | \`${{ github.sha }}\` |"
-            echo "| Tag action | ${{ steps.check_tag.outputs.exists_at_head == 'true' && 'skipped (tag already at HEAD)' || 'created and pushed' }} |"
-          } >> $GITHUB_STEP_SUMMARY
+            for t in "${CREATED[@]:-}"; do [ -n "$t" ] && echo "| \`$t\` | created & pushed |"; done
+            for t in "${SKIPPED[@]:-}"; do [ -n "$t" ] && echo "| \`$t\` | skipped |"; done
+          } >> "$GITHUB_STEP_SUMMARY"

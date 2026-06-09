@@ -6,8 +6,8 @@
     "email": "devtools@ohmyhotel.com"
   },
   "metadata": {
-    "description": "Internal Claude Code plugins for OhMyHotel engineering — git workflow, PR automation, release management following the company Git Branch Strategy.",
-    "version": "2.0.0"
+    "description": "Internal Claude Code plugins for OhMyHotel engineering — git workflow, PR automation, release management, and SLA/incident management following the company Git Branch Strategy and SLA Policy.",
+    "version": "2.1.0"
   },
   "plugins": [
     {
@@ -20,6 +20,17 @@
         "email": "devtools@ohmyhotel.com"
       },
       "tags": ["git", "workflow", "pull-request", "release", "hotfix", "ohmyhotel"]
+    },
+    {
+      "name": "omh-sla-workflow",
+      "source": "./plugins/omh-sla-workflow",
+      "description": "5 slash commands that enforce the OMH SLA Policy for incident management and Post-Incident Reviews: incident-triage, create-pir, review-pir, pir-action-items, sla-report.",
+      "version": "1.0.0",
+      "author": {
+        "name": "OhMyHotel DevTools",
+        "email": "devtools@ohmyhotel.com"
+      },
+      "tags": ["sla", "incident", "pir", "postmortem", "on-call", "ohmyhotel"]
     }
   ]
 }
