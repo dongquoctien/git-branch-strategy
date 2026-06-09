@@ -30,6 +30,8 @@ The PIR must satisfy ALL of these. Each maps to a real recurring review failure:
 | G11 | **Sign-off block** | No Part Lead + Dev Manager sign-off lines (both required to close) | §7.5, §15 |
 | G12 | **Deadline** | Resolved >1 business day ago and PIR still open/unclosed | §7.5 deadline |
 
+> **Per-task reviewer asks (not fixed gates).** G1–G12 are the stable gates the SLA Policy defines. Beyond them, the Dev Manager / Part Lead often raise **task-specific requests** in the ticket comments (e.g. "quantify the booking loss", "clarify why this owner", "split this action item") — these vary case by case and are **not** encoded as gates. When auditing, read the reviewer's own comments on the ticket and list any open/unaddressed asks in a separate **"Reviewer requests on this ticket"** section of the report — clearly marked as the reviewer's call for that task, not a policy rule. Do not invent or generalize them into permanent gates.
+
 ---
 
 ## Interaction convention — ALWAYS use AskUserQuestion
@@ -46,6 +48,7 @@ The PIR must satisfy ALL of these. Each maps to a real recurring review failure:
 
 - If the ticket isn't a PIR (no `pir`/`systemissue` label and title doesn't match "PIR"), warn and ask whether to continue anyway.
 - Locate the PIR document: prefer an attached `.md`; else the inline PIR content in description/comments. **If the only copy is a personal SharePoint/OneDrive link → that's an automatic G8 FAIL** (and you may not be able to read it; note that in the report).
+- Also scan the **comments** for any requests left by the Dev Manager / Part Lead — these are the per-task reviewer asks (not fixed gates) collected for the report's "Reviewer requests on this ticket" section.
 
 ### Step 2 — Run the 12 gates
 
@@ -80,9 +83,13 @@ G11 Sign-off block ............... PASS (Part Lead + Dev Manager lines present, 
 G12 Deadline (≤1 business day) ... PASS
 
 Verdict: 7/12 — NOT review-ready. 5 blockers above.
+
+Reviewer requests on this ticket (per-task, from comments — not policy gates):
+- [Dev Manager] quantify the booking loss during the window  → open
+- [Part Lead] clarify why <owner> owns action #2              → addressed in latest .md
 ```
 
-Then a prioritized **"Fix before requesting sign-off"** list (blockers first), each with the concrete action and the skill that fixes it where applicable.
+Then a prioritized **"Fix before requesting sign-off"** list (policy-gate blockers first), each with the concrete action and the skill that fixes it where applicable. Keep the "Reviewer requests" items separate — they reflect that task's reviewer judgment, which varies per incident, not a permanent rule.
 
 ### Step 4 — Offer to post the review as a Jira comment (optional, confirmed)
 
