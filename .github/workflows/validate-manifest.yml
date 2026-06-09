@@ -4,15 +4,17 @@ name: Validate plugin manifest
 # bugs we hit on v1.0.0 (plugin.json schema violations that silently
 # broke /plugin install for every user until a fix-forward release).
 #
-# Checks:
-#   - plugin.json is valid JSON with required fields
+# Checks (for EVERY plugin in the marketplace, not just the first):
+#   - each plugins/*/.claude-plugin/plugin.json is valid JSON with required fields
 #   - marketplace.json is valid JSON with required fields
-#   - version in plugin.json matches marketplace.json[plugins[0]].version
-#   - version was bumped vs base branch (if manifest content changed)
+#   - each plugin.json version matches its marketplace.json plugins[] entry
+#   - version was bumped vs base branch when content changed:
+#       * a plugin's plugin.json + its marketplace entry → that plugin's version
+#       * marketplace.json structure (e.g. adding a plugin) → metadata.version
 #   - no unsupported fields that Claude Code rejects at install time
 #     (repository must be string; commands field must not be present)
 #
-# Runs only on PR events that touch the manifest files.
+# Runs only on PR events that touch manifest files.
 
 on:
   pull_request:
@@ -37,58 +39,57 @@ jobs:
         run: |
           git fetch origin ${{ github.base_ref }}:${{ github.base_ref }}
 
-      - name: Validate plugin.json shape
+      - name: Validate every plugin.json shape
         run: |
-          FILE=plugins/omh-git-workflow/.claude-plugin/plugin.json
-
-          if [ ! -f "$FILE" ]; then
-            echo "::error file=$FILE::Manifest file missing"
+          shopt -s nullglob
+          FILES=(plugins/*/.claude-plugin/plugin.json)
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "::error::No plugin.json files found under plugins/*/.claude-plugin/"
             exit 1
           fi
 
-          # Must be valid JSON
-          if ! jq empty "$FILE" 2>/tmp/jq.err; then
-            echo "::error file=$FILE::Invalid JSON: $(cat /tmp/jq.err)"
-            exit 1
-          fi
+          for FILE in "${FILES[@]}"; do
+            echo "--- $FILE ---"
 
-          # Required fields
-          for key in name version description author; do
-            if [ "$(jq -r "has(\"$key\")" "$FILE")" != "true" ]; then
-              echo "::error file=$FILE::Missing required field: $key"
+            if ! jq empty "$FILE" 2>/tmp/jq.err; then
+              echo "::error file=$FILE::Invalid JSON: $(cat /tmp/jq.err)"
               exit 1
             fi
+
+            for key in name version description author; do
+              if [ "$(jq -r "has(\"$key\")" "$FILE")" != "true" ]; then
+                echo "::error file=$FILE::Missing required field: $key"
+                exit 1
+              fi
+            done
+
+            # repository must be a string (Claude Code rejects object form)
+            REPO_TYPE=$(jq -r '.repository | type' "$FILE")
+            if [ "$REPO_TYPE" != "string" ] && [ "$REPO_TYPE" != "null" ]; then
+              echo "::error file=$FILE::'repository' must be a string URL or omitted (got: $REPO_TYPE). See v1.0.0 → v1.0.1 fix."
+              exit 1
+            fi
+
+            # 'commands' field is not part of manifest schema — Claude Code auto-discovers
+            if [ "$(jq -r 'has("commands")' "$FILE")" = "true" ]; then
+              echo "::error file=$FILE::'commands' field is not allowed in plugin.json — Claude Code auto-discovers from commands/ directory. See v1.0.0 → v1.0.1 fix."
+              exit 1
+            fi
+
+            AUTHOR_NAME=$(jq -r '.author.name // empty' "$FILE")
+            if [ -z "$AUTHOR_NAME" ]; then
+              echo "::error file=$FILE::'author.name' is required"
+              exit 1
+            fi
+
+            VERSION=$(jq -r '.version' "$FILE")
+            if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
+              echo "::error file=$FILE::'version' is not semver: $VERSION"
+              exit 1
+            fi
+
+            echo "plugin.json OK ($VERSION)"
           done
-
-          # repository must be a string (Claude Code rejects object form)
-          REPO_TYPE=$(jq -r '.repository | type' "$FILE")
-          if [ "$REPO_TYPE" != "string" ] && [ "$REPO_TYPE" != "null" ]; then
-            echo "::error file=$FILE::'repository' must be a string URL or omitted (got: $REPO_TYPE). See v1.0.0 → v1.0.1 fix."
-            exit 1
-          fi
-
-          # 'commands' field is not part of manifest schema — Claude Code auto-discovers
-          if [ "$(jq -r 'has("commands")' "$FILE")" = "true" ]; then
-            echo "::error file=$FILE::'commands' field is not allowed in plugin.json — Claude Code auto-discovers from commands/ directory. See v1.0.0 → v1.0.1 fix."
-            exit 1
-          fi
-
-          # author must be object with name
-          AUTHOR_NAME=$(jq -r '.author.name // empty' "$FILE")
-          if [ -z "$AUTHOR_NAME" ]; then
-            echo "::error file=$FILE::'author.name' is required"
-            exit 1
-          fi
-
-          # version must be semver
-          VERSION=$(jq -r '.version' "$FILE")
-          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
-            echo "::error file=$FILE::'version' is not semver: $VERSION"
-            exit 1
-          fi
-
-          echo "plugin.json OK ($VERSION)"
-          echo "plugin_version=$VERSION" >> $GITHUB_ENV
 
       - name: Validate marketplace.json shape
         run: |
@@ -104,7 +105,6 @@ jobs:
             exit 1
           fi
 
-          # Required fields
           for key in name plugins; do
             if [ "$(jq -r "has(\"$key\")" "$FILE")" != "true" ]; then
               echo "::error file=$FILE::Missing required field: $key"
@@ -112,60 +112,87 @@ jobs:
             fi
           done
 
-          # plugins must be a non-empty array
           PLUGIN_COUNT=$(jq -r '.plugins | length' "$FILE")
           if [ "$PLUGIN_COUNT" -lt 1 ]; then
             echo "::error file=$FILE::'plugins' must contain at least 1 entry"
             exit 1
           fi
 
-          # plugins[0].source must be a local path starting with ./
-          SOURCE=$(jq -r '.plugins[0].source' "$FILE")
-          if ! echo "$SOURCE" | grep -qE '^\./'; then
-            echo "::error file=$FILE::plugins[0].source must be a local path starting with './' (got: $SOURCE)"
-            exit 1
-          fi
-
-          MKT_VERSION=$(jq -r '.plugins[0].version' "$FILE")
-          echo "marketplace.json OK ($MKT_VERSION)"
-          echo "marketplace_plugin_version=$MKT_VERSION" >> $GITHUB_ENV
-
-      - name: Check version consistency
-        run: |
-          if [ "$plugin_version" != "$marketplace_plugin_version" ]; then
-            echo "::error::Version mismatch between manifests:"
-            echo "  plugin.json:        $plugin_version"
-            echo "  marketplace.json:   $marketplace_plugin_version"
-            echo "Both must be updated together (see CLAUDE.md SemVer rules)."
-            exit 1
-          fi
-          echo "Versions consistent: $plugin_version"
-
-      - name: Check version bumped vs base
-        run: |
-          # If manifest content changed vs base branch, version must be bumped too
-          FILES="plugins/omh-git-workflow/.claude-plugin/plugin.json .claude-plugin/marketplace.json"
-          for f in $FILES; do
-            if git diff --quiet origin/${{ github.base_ref }} -- "$f"; then
-              continue   # file unchanged; no bump needed
+          # Every plugin entry: source must be a local path starting with ./
+          for i in $(seq 0 $((PLUGIN_COUNT - 1))); do
+            SOURCE=$(jq -r ".plugins[$i].source" "$FILE")
+            NAME=$(jq -r ".plugins[$i].name" "$FILE")
+            if ! echo "$SOURCE" | grep -qE '^\./'; then
+              echo "::error file=$FILE::plugins[$i] ($NAME) source must be a local path starting with './' (got: $SOURCE)"
+              exit 1
             fi
+          done
 
-            # File changed — extract base version
-            BASE_VERSION=$(git show origin/${{ github.base_ref }}:"$f" 2>/dev/null | jq -r '.version // .plugins[0].version // empty')
-            HEAD_VERSION=$(jq -r '.version // .plugins[0].version' "$f")
+          echo "marketplace.json OK ($PLUGIN_COUNT plugin(s))"
 
-            if [ -z "$BASE_VERSION" ]; then
-              echo "Could not read base version for $f (file may be new on this PR) — skipping bump check"
-              continue
-            fi
+      - name: Check per-plugin version consistency
+        run: |
+          # Each marketplace plugins[] entry's version must equal that plugin's plugin.json version.
+          MKT=.claude-plugin/marketplace.json
+          PLUGIN_COUNT=$(jq -r '.plugins | length' "$MKT")
+          for i in $(seq 0 $((PLUGIN_COUNT - 1))); do
+            NAME=$(jq -r ".plugins[$i].name" "$MKT")
+            SOURCE=$(jq -r ".plugins[$i].source" "$MKT")
+            MKT_VER=$(jq -r ".plugins[$i].version" "$MKT")
+            PLUGIN_JSON="${SOURCE#./}/.claude-plugin/plugin.json"
 
-            if [ "$BASE_VERSION" = "$HEAD_VERSION" ]; then
-              echo "::error file=$f::Manifest content changed but version was not bumped ($BASE_VERSION → $HEAD_VERSION). Bump per CLAUDE.md SemVer rules: patch=bugfix, minor=new skill, major=breaking."
+            if [ ! -f "$PLUGIN_JSON" ]; then
+              echo "::error file=$MKT::plugins[$i] ($NAME) source '$SOURCE' has no plugin.json at $PLUGIN_JSON"
               exit 1
             fi
 
-            echo "$f: version bumped $BASE_VERSION → $HEAD_VERSION"
+            PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON")
+            if [ "$MKT_VER" != "$PLUGIN_VER" ]; then
+              echo "::error::Version mismatch for $NAME: marketplace=$MKT_VER, plugin.json=$PLUGIN_VER. Both must match (see CLAUDE.md)."
+              exit 1
+            fi
+            echo "$NAME: versions consistent ($PLUGIN_VER)"
           done
+
+      - name: Check version bumped vs base
+        run: |
+          BASE=origin/${{ github.base_ref }}
+
+          # 1) For each plugin: if its plugin.json OR its marketplace entry changed,
+          #    that plugin's plugin.json version must be bumped vs base.
+          for PLUGIN_JSON in plugins/*/.claude-plugin/plugin.json; do
+            [ -f "$PLUGIN_JSON" ] || continue
+            if git diff --quiet "$BASE" -- "$PLUGIN_JSON"; then
+              continue   # this plugin's manifest unchanged
+            fi
+            BASE_VER=$(git show "$BASE:$PLUGIN_JSON" 2>/dev/null | jq -r '.version // empty')
+            HEAD_VER=$(jq -r '.version' "$PLUGIN_JSON")
+            if [ -z "$BASE_VER" ]; then
+              echo "$PLUGIN_JSON is new on this PR — no bump check needed"
+              continue
+            fi
+            if [ "$BASE_VER" = "$HEAD_VER" ]; then
+              echo "::error file=$PLUGIN_JSON::Manifest content changed but version was not bumped ($BASE_VER → $HEAD_VER). Bump per CLAUDE.md SemVer rules."
+              exit 1
+            fi
+            echo "$PLUGIN_JSON: version bumped $BASE_VER → $HEAD_VER"
+          done
+
+          # 2) marketplace.json: if it changed, marketplace metadata.version must be bumped.
+          #    (Adding/removing a plugin, or editing descriptions, is a marketplace-level change.)
+          MKT=.claude-plugin/marketplace.json
+          if ! git diff --quiet "$BASE" -- "$MKT"; then
+            BASE_MKT_VER=$(git show "$BASE:$MKT" 2>/dev/null | jq -r '.metadata.version // empty')
+            HEAD_MKT_VER=$(jq -r '.metadata.version' "$MKT")
+            if [ -z "$BASE_MKT_VER" ]; then
+              echo "marketplace.json metadata.version is new — skipping bump check"
+            elif [ "$BASE_MKT_VER" = "$HEAD_MKT_VER" ]; then
+              echo "::error file=$MKT::marketplace.json changed but metadata.version was not bumped ($BASE_MKT_VER → $HEAD_MKT_VER). Bump it when adding a plugin or editing the marketplace."
+              exit 1
+            else
+              echo "marketplace.json: metadata.version bumped $BASE_MKT_VER → $HEAD_MKT_VER"
+            fi
+          fi
 
       - name: Summary
         if: always()
@@ -175,10 +202,8 @@ jobs:
             echo ""
             echo "| Check | Result |"
             echo "|---|---|"
-            echo "| plugin.json shape | ${{ job.status == 'success' && '✅' || '❌' }} |"
+            echo "| plugin.json shape (all plugins) | ${{ job.status == 'success' && '✅' || '❌' }} |"
             echo "| marketplace.json shape | ${{ job.status == 'success' && '✅' || '❌' }} |"
-            echo "| Version consistency | ${{ job.status == 'success' && '✅' || '❌' }} |"
+            echo "| Per-plugin version consistency | ${{ job.status == 'success' && '✅' || '❌' }} |"
             echo "| Version bumped on content change | ${{ job.status == 'success' && '✅' || '❌' }} |"
-            echo ""
-            echo "Plugin version: \`${plugin_version:-unknown}\`"
           } >> $GITHUB_STEP_SUMMARY

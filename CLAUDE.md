@@ -58,34 +58,39 @@ When modifying any `commands/omh-*.md`:
 4. **Never bypass**: `--no-verify`, `--force` (use `--force-with-lease`), `--amend` — skills refuse unless the user asks explicitly.
 5. **Delegate to other skills** rather than duplicating logic. `/omh-release` calls `/omh-cherry-pick` for bugs during staging; `/omh-hotfix` calls `/omh-open-pr` for the PR phase.
 
-## Versioning & release of the plugin itself
+## Versioning & release of the plugins
 
-The plugin follows SemVer in two places that must stay in sync:
+Each plugin follows SemVer **independently**. A plugin's version lives in two places that must stay in sync (the `validate-manifest` CI enforces this per plugin):
 
-- `plugins/omh-git-workflow/.claude-plugin/plugin.json` → `version`
-- `.claude-plugin/marketplace.json` → `plugins[0].version`
+- `plugins/<plugin>/.claude-plugin/plugin.json` → `version`
+- the matching `.claude-plugin/marketplace.json` `plugins[]` entry → `version`
 
-When changing a skill, bump:
+The marketplace itself has its own version at `.claude-plugin/marketplace.json` → `metadata.version`. Bump it when the **marketplace** changes (adding/removing a plugin, editing descriptions) — CI requires this whenever `marketplace.json` changes.
+
+When changing a skill, bump that plugin's version:
 
 - **Patch** (`1.0.0 → 1.0.1`): bug fix, wording clarification, same interaction contract
 - **Minor** (`1.0.0 → 1.1.0`): new skill added, new optional argument, new AskUserQuestion branch
 - **Major** (`1.0.0 → 2.0.0`): rule change that alters what the skill refuses or forces; command rename/removal; argument signature change
 
-Tag the repo with the version (e.g. `v1.1.0`) after merge. Claude Code uses git tags + `plugin.json version` to decide whether to prompt users to update. A new tag **without** a version bump will be ignored.
+### Tag scheme (multi-plugin)
 
-**Tag cleanup on patch rollovers**: when a patch bump ships via PR (e.g. `v1.0.0 → v1.0.1`), keep the old tag — it's a historical marker. Do NOT delete. But ensure:
+- `omh-git-workflow` keeps the **historical bare scheme**: `v<version>` (e.g. `v2.0.0`). Do NOT rename the existing `v1.x`/`v2.x` tags — they're git-workflow's.
+- Every other plugin is **namespaced**: `<plugin-name>-v<version>` (e.g. `omh-sla-workflow-v1.0.0`).
 
-- The **new** tag points at the merge commit of the version-bump PR, not at an older commit
-- `marketplace.json` `plugins[].version` AND `plugin.json` `version` match the tag exactly
-- If you forget to tag after merge, Claude Code will keep installing the previous version — users will see stale behavior
+### Tagging is automated
 
-Recommended post-merge ritual (until CI automation lands):
+`.github/workflows/auto-tag-plugin.yml` runs on every push to `master` that touches a manifest. For each plugin whose version changed it creates and pushes the correct tag (per the scheme above), and refuses to move an existing tag. **So after a version-bump PR merges, you normally do nothing** — the tag appears automatically. Claude Code uses these tags + `plugin.json version` to decide whether to offer users an update; a tag without a version bump is ignored.
+
+Manual fallback (only if the workflow is disabled/broken), tagging the master merge commit:
 ```bash
-git fetch origin master
-git checkout master && git pull
-git tag -a vX.Y.Z -m "Release vX.Y.Z: <short>"
-git push origin vX.Y.Z
+git fetch origin master && git checkout master && git pull
+# omh-git-workflow:
+git tag -a vX.Y.Z -m "Release vX.Y.Z: <short>" && git push origin vX.Y.Z
+# any other plugin:
+git tag -a <plugin>-vX.Y.Z -m "Release <plugin> vX.Y.Z" && git push origin <plugin>-vX.Y.Z
 ```
+Keep old tags on patch rollovers — they're historical markers; never delete.
 
 ## Adding a new skill
 
