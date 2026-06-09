@@ -47,7 +47,7 @@ After install, reload plugins (or restart Claude Code):
 /reload-plugins
 ```
 
-Verify the 19 commands are available — type `/omh-` and autocomplete should list them.
+Verify the 21 commands are available — type `/omh-` and autocomplete should list them.
 
 ---
 
@@ -123,6 +123,8 @@ Either the GitHub MCP server OR the `gh` CLI authenticated with `gh auth login`.
 
 # 1. Create branch from master (skill validates Jira, kebab-case, clean tree)
 /omh-new-branch ELS-234
+# …or work in parallel without disturbing your current checkout:
+#   /omh-new-worktree ELS-234   → branch lives in .claude/worktree/ELS-234-…
 
 # (implement changes in your editor)
 
@@ -145,7 +147,7 @@ Either the GitHub MCP server OR the `gh` CLI authenticated with `gh auth login`.
 /omh-check-pr
 # If blockers: /omh-fix-pr to walk through fixes
 
-# 8. After PR merges, clean up the branch
+# 8. After PR merges, clean up the branch (or /omh-clean-worktree if you used one)
 /omh-delete-branch
 ```
 
@@ -155,7 +157,7 @@ That covers **95% of daily work**. The other 13 commands are situational (releas
 
 ---
 
-## 7. Full cheatsheet — all 19 commands
+## 7. Full cheatsheet — all 21 commands
 
 ### Daily work (everyone)
 
@@ -163,6 +165,7 @@ That covers **95% of daily work**. The other 13 commands are situational (releas
 |---|---|---|
 | `/omh-status` | Start of session | Read-only dashboard: branch, PR, CI, stale branches, next action |
 | `/omh-new-branch <JIRA-KEY>` | Starting a ticket | Branch = `{KEY}-{desc}`, from `origin/master`, no `feature/` prefix |
+| `/omh-new-worktree <JIRA-KEY>` | Starting a ticket in parallel | Same branch rules, but checks out into `.claude/worktree/{branch}` (dirty tree doesn't block); auto-gitignores the worktree dir |
 | `/omh-commit` | Staging → commit | `<type>(<scope>): <subject>` ≤50 chars, body 72 wrap, auto `Refs: KEY` |
 | `/omh-squash` | Before opening PR (clean history) | Squash branch commits since merge-base into 1; preserves co-authors; reset --soft based |
 | `/omh-sync-master` | Branch falls behind master | Rebase (single-dev) or merge (multi-dev) per §16 |
@@ -173,6 +176,7 @@ That covers **95% of daily work**. The other 13 commands are situational (releas
 | `/omh-ci-status` | After push | Check CI gates per §15 — Build, Tests, Lint, Sonar, AI review |
 | `/omh-reviewers` | When PR ready for review | Auto-assign Tech Lead + domain expert per §15 |
 | `/omh-delete-branch` | After PR merged | Verify merged (incl. squash), delete local + remote per §12 |
+| `/omh-clean-worktree` | After PR merged (if you used a worktree) | Remove merged worktrees (incl. squash), optionally delete the branch, prune stale entries per §12 |
 
 ### Throwaway-branch hygiene
 
