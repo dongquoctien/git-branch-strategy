@@ -52,7 +52,7 @@ After install, reload plugins (or restart Claude Code):
 /reload-plugins
 ```
 
-Verify the 21 git commands are available — type `/omh-` and autocomplete should list them. If you installed the SLA plugin, you'll also see the 5 incident/PIR commands (`/omh-incident-triage`, `/omh-create-pir`, `/omh-review-pir`, `/omh-pir-action-items`, `/omh-sla-report`).
+Verify the 22 git commands are available — type `/omh-` and autocomplete should list them. If you installed the SLA plugin, you'll also see the 5 incident/PIR commands (`/omh-incident-triage`, `/omh-create-pir`, `/omh-review-pir`, `/omh-pir-action-items`, `/omh-sla-report`).
 
 ---
 
@@ -162,7 +162,7 @@ That covers **95% of daily work**. The other 13 commands are situational (releas
 
 ---
 
-## 7. Full cheatsheet — all 21 commands
+## 7. Full cheatsheet — all 22 commands
 
 ### Daily work (everyone)
 
@@ -182,6 +182,7 @@ That covers **95% of daily work**. The other 13 commands are situational (releas
 | `/omh-reviewers` | When PR ready for review | Auto-assign Tech Lead + domain expert per §15 |
 | `/omh-delete-branch` | After PR merged | Verify merged (incl. squash), delete local + remote per §12 |
 | `/omh-clean-worktree` | After PR merged (if you used a worktree) | Remove merged worktrees (incl. squash), optionally delete the branch, prune stale entries per §12 |
+| `/omh-voc-migration <JIRA-KEY>` | VOC / data-fix SQL to run on PROD | Pull SQL from ticket comments (or MCP-generate), do Claude AI SQL Review, scaffold into oh-api `migration/` with rollback, open PR to master with the SOP §6 checklist. Cites the SQL Validation SOP. Never executes SQL. |
 
 ### Throwaway-branch hygiene
 
