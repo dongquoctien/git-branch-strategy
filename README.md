@@ -476,6 +476,14 @@ All fields below are mandatory before a PR can be submitted for review. Reviewer
 
 **If test evidence is unavailable** (e.g. environment issue), the author must add a comment explaining why and tag the Tech Lead for explicit sign-off before the PR can proceed.
 
+### No AI / tool attribution in the PR body
+
+The PR description must **not** contain an AI-assistant co-author or generator
+line — e.g. `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`,
+`🤖 Generated with Claude Code`, or any equivalent tool-attribution footer.
+The PR is owned by its author. This mirrors the commit rule in §14 ("No AI /
+tool attribution trailers").
+
 ---
 
 ## 14. Git Commit Convention
@@ -520,6 +528,22 @@ All commits must follow the **Conventional Commits** format combined with the **
 - Reference Jira tickets: `Refs: ELS-123`
 - Note breaking changes: `BREAKING CHANGE: <description>`
 - One footer entry per line
+
+### No AI / tool attribution trailers
+
+Commit messages must **not** carry an AI-assistant co-author or generator
+trailer. Do **not** append lines such as:
+
+```
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Co-authored-by: Claude <noreply@anthropic.com>
+Generated-by: <any AI tool>
+```
+
+The authoritative author of a commit is the engineer who owns it. Human
+`Co-Authored-By:` trailers for genuine pair-programming or a squashed
+multi-author range are still allowed (see §21 / `/omh-squash`) — this rule
+targets only AI-assistant attribution.
 
 ### Full example
 

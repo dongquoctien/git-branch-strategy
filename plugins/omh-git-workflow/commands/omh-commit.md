@@ -39,6 +39,7 @@ If the change does not match any listed scope, pick a new lowercase single-word/
 | Body wrapped at 72 chars | Every body line ≤ 72 chars |
 | Blank line between subject and body | Mandatory if body exists |
 | `hotfix/*` branch uses `fix` commit type | Do NOT use `hotfix` type for hotfix branches — per §14 note |
+| No AI attribution trailer | Message must NOT contain `Co-Authored-By: Claude...`, `Co-authored-by: Claude...`, or any AI generator trailer — per §14 "No AI / tool attribution trailers" |
 
 **Reject vague subjects:** `fix bug`, `update code`, `WIP`, `changes`, `misc`, `stuff`.
 
@@ -119,6 +120,12 @@ If breaking change detected (removed API, schema change, env var removal), add:
 ```
 BREAKING CHANGE: <short description>
 ```
+
+**Never** append an AI-assistant attribution trailer to the footer — no
+`Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`, no
+`🤖 Generated with Claude Code`, no equivalent (§14 "No AI / tool attribution
+trailers"). The footer ends at `Refs:` / `BREAKING CHANGE:`. Human
+`Co-Authored-By:` trailers for genuine pair-programming remain allowed.
 
 ### Step 6 — Show commit preview & confirm via AskUserQuestion
 
@@ -219,3 +226,4 @@ docs(api): update booking endpoint docs     ← 42 chars ✅
 - Does not push (that's a separate step)
 - Does not create PR (use `/omh-open-pr`)
 - Does not bypass CI or hooks
+- Does not add AI-assistant attribution trailers (`Co-Authored-By: Claude...`, `🤖 Generated with...`) — forbidden by §14
