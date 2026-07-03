@@ -211,6 +211,11 @@ Template:
 - Rollback: <SQL or procedure>
 ```
 
+The PR body ends here. **Never** append an AI-assistant attribution line —
+no `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`,
+no `🤖 Generated with Claude Code`, no equivalent tool footer (§13 "No AI /
+tool attribution in the PR body").
+
 ### Step 6 — Push branch
 
 ```bash
@@ -293,6 +298,7 @@ Rules:
 - Do NOT open PR from `master` / `develop` / `staging` / `release/*` as source
 - Do NOT bypass the rebase check — per §15 "zero conflicts required"
 - Do NOT fabricate test evidence — flag as pending if missing
+- Do NOT add an AI-assistant attribution line to the PR body (`Co-Authored-By: Claude...`, `🤖 Generated with...`) — forbidden by §13
 
 ---
 

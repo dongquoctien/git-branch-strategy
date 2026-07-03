@@ -240,6 +240,7 @@ Output:
 - Do NOT reset the source branch to the target.
 - Do NOT auto-stash, auto-rebase, auto-resolve conflicts, or auto force-push.
 - Do NOT fabricate PR body content (summary, test evidence, risk, promotion path, Jira link). Body = commit content, verbatim.
+- Do NOT inject an AI-assistant attribution line into the title or body (`Co-Authored-By: Claude...`, `🤖 Generated with...`) — forbidden by §13. Body stays verbatim commit content, which §14 already keeps trailer-free.
 - Do NOT use `--force` (use `--force-with-lease` only if explicitly asked), `--no-verify`, or `--amend` unless the user explicitly requests it.
 
 ---
