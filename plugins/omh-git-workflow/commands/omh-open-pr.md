@@ -89,6 +89,9 @@ If no Jira key in branch name or ticket not found → stop, ask user to provide 
 - Scope = primary touched module (see §14 scope list: `auth`, `payment`, `search`, `booking`, `infra`, `ui`, `api`, `notification`)
 - Subject from Jira summary, rewritten in imperative mood, lowercase, no trailing period
 - Example: `feat(auth): add Google OAuth login`
+- **VOC override**: if the caller passes an explicit title (e.g. `/omh-voc-migration` supplies
+  `VOC(<JIRA-KEY>): …`), use it verbatim — do NOT re-derive a conventional-commit title. VOC /
+  data-migration PRs use the `VOC(<JIRA-KEY>):` prefix and also get the `VOC` repo label (Step 7).
 
 **Summary** (2–5 sentences):
 - What changed + why (business impact / user-facing reason)
@@ -248,6 +251,14 @@ gh pr create --base <target> --head <branch> --title "<title>" --body "$(cat <<'
 EOF
 )"
 ```
+
+**Apply PR labels (if any were requested by the caller):** e.g. for a VOC / data-migration PR add
+the `VOC` label right after creation —
+```bash
+gh pr edit <pr-number> --add-label VOC
+```
+(label `VOC` exists on `ohmyhotelco/oh-api`, color `F5A757`). On Bitbucket, apply the equivalent
+label/tag via the PR UI/API. Skip silently if no label was requested.
 
 ### Step 8 — Link PR back to Jira
 

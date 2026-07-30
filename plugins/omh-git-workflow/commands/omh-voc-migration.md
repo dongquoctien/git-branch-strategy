@@ -149,6 +149,16 @@ In `repo_path`:
   - The **Claude AI SQL Review block** from Step 2 (SOP §3 requires it attached).
   - The **Production Approval Checklist** (SOP §6, all 10 items as unchecked boxes).
   - The Heavy-Op note (SLA §6) if flagged.
+- **VOC PR format (override the default conventional-commit title):**
+  - **Title** starts with `VOC(<JIRA-KEY>):` — NOT `migration(...)` / `fix(...)` / `feat(...)`.
+    e.g. `VOC(ELS-2800): Prepay/VCC -> Prepay/Cash + issue vendor billing (Pandanus Resort)`.
+    (The commit message and the `migration/` folder name still use `migration(...)` — only the PR
+    title changes.)
+  - **Add the GitHub label `VOC`** to the PR right after it opens: `gh pr edit <n> --add-label VOC`
+    (label exists on `ohmyhotelco/oh-api`, color `F5A757`). On Bitbucket, apply the equivalent
+    `VOC` label/tag. This is a **repo PR label**, not a Jira label.
+  - Pass the `VOC(<JIRA-KEY>): …` title into `/omh-open-pr` so it does not re-derive a
+    conventional-commit title, and confirm the label was applied in the Step 6 report.
 
 Confirm before opening:
 
