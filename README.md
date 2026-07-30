@@ -422,6 +422,8 @@ The description must be a short slug (kebab-case, no spaces) that identifies the
 | `notification` | Email, push, and in-app notifications |
 
 > The PR title follows the conventional commit format. The branch name (e.g. `ELS-123-add-login`) is separate from and does not need to mirror the PR title.
+>
+> **VOC / data-migration PRs are the one exception to the conventional-commit title.** A PR produced by `/omh-voc-migration` (a VOC ticket -> SQL migration -> PR to `master`) uses the title prefix **`VOC(<JIRA-KEY>):`** instead of `feat(...)`/`fix(...)`/`migration(...)`, and additionally carries the repo PR label **`VOC`** (on `ohmyhotelco/oh-api`, color `F5A757`; apply with `gh pr edit <n> --add-label VOC`). The commit message and the `migration/` folder name still use the `migration(...)` convention -- only the PR title/label change. Example: `VOC(ELS-2800): Prepay/VCC -> Prepay/Cash + issue vendor billing (Pandanus Resort)`.
 > 
 
 **Example PR:**
