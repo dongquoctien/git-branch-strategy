@@ -16,6 +16,7 @@ This skill turns a VOC / data-fix request into a **reviewed, rollback-able SQL m
 
 ## Rules (from SOP SQL Validation §1–§6, + Git Strategy + SLA §6)
 
+- **Subtask-first (company rule)**: if the ticket being VOC'd is a **parent Task** with no Subtask assigned to the **current MCP user** (resolve via `jira_get_user_profile("currentUser")` — do NOT hard-code Tom), **create one first** — Subtask, assignee = current user, status **In Progress** (Step 0). The migration work is tracked under that subtask. If the ticket is already a Subtask, skip. **Never create a duplicate if a subtask already assigned to the current user exists — reuse it** (just ensure In Progress).
 - Applies to Production-mutating SQL: `UPDATE` / `DELETE` / bulk `INSERT` / `ALTER TABLE` / data-migration / VOC scripts (SOP §1)
 - **Prerequisites (SOP §2)**: a Jira ticket, committed to Git, PR approved, **merged to master before any execution**, following the Git Strategy. Direct PROD execution outside the Git process is **prohibited**.
 - **Step 1 — Claude AI SQL Review (SOP §3)**: review Full-Table-Scan / Missing-Index / Lock / Estimated-Impact / Recommendations, and the review block **must be attached to the PR**.
@@ -44,6 +45,52 @@ This skill turns a VOC / data-fix request into a **reviewed, rollback-able SQL m
 ---
 
 ## Workflow
+
+### Step 0 — Ensure a working Subtask exists on the VOC parent (company rule)
+
+**Company rule:** whenever you VOC a **parent** ticket (a Task, not a Subtask), the actual work must
+live in a **Subtask assigned to the current engineer (the person whose token is connected to this MCP)
+with status In Progress**. This subtask is where the SQL/migration work is tracked. Do this **before**
+collecting SQL so you never repeat it later. (Reference: ELS-2692 → subtask ELS-2693;
+ELS-2946 → subtask ELS-2948.)
+
+**"The engineer" = the current MCP user, resolved at runtime — do NOT hard-code an email/name.**
+Get their accountId once with `jira_get_user_profile(user_identifier="currentUser")` (or
+`get_me`-equivalent), and compare subtasks' assignee against **that** accountId. In this project the
+current user is usually Tom (`tien.dq@ohmyhotel.com`), but the skill must stay flexible — whoever is
+connected is the assignee.
+
+1. **Detect.** From the Step-1 fetch (or a quick `jira_get_issue(jira_key, fields="issuetype,subtasks,assignee")`):
+   - If `jira_key` **is itself a Subtask** (`issuetype.subtask == true`) → skip Step 0 entirely; work directly on it (transition it to In Progress if it isn't already).
+   - If `jira_key` is a **parent Task** and **already has a subtask assigned to the current user** → **reuse it, do NOT create another**; just ensure it is In Progress. (Match on the resolved accountId — a subtask assigned to someone else does NOT count.)
+   - If `jira_key` is a **parent Task with no subtask assigned to the current user** → create one (next).
+
+2. **Create the working subtask** (mirror the ELS-2693 style — action-oriented summary
+   "Verify data and logic to <the change requested> for <hotel/booking>"):
+   ```
+   jira_create_issue(
+     project_key = "ELS",              # same project as the parent
+     issue_type  = "Subtask",          # capital S, one word — NOT "Sub-task"
+     summary     = "Verify data and logic to <change> for <hotel/booking scope>",
+     description = "<one-paragraph scope: what to change, the booking/hotel list, guard notes>",
+     assignee    = "<current user's email / accountId>",   # resolved above, not hard-coded
+     additional_fields = {"parent": "<parent JIRA-KEY>"}
+   )
+   ```
+   A subtask is created in the default status (usually **To Do**), so **transition it to In Progress**:
+   `jira_get_transitions(<subtask key>)` → find the `In Progress` transition id (typically **21** on
+   the ELS board) → `jira_transition_issue(<subtask key>, transition_id)`.
+
+3. **Confirm before creating** (outward write) via AskUserQuestion — preview the subtask summary +
+   parent + assignee. Skip the prompt only if the user explicitly asked to auto-create it.
+
+4. **From here on, the migration work (branch name, commit, PR) still references the PARENT
+   `jira_key`** for the `VOC(<parent>):` title and folder — the subtask is the Jira-side work tracker,
+   not the branch key. (Optionally note the subtask key in the PR body / report.)
+
+> Note: the **Reporter** on a freshly-created ELS subtask cannot be set via the API (screen
+> restriction — same as `[[jira-clone-btbs-els]]`); it defaults to the creating (current) user, which
+> is fine here since that same user is the assignee doing the work.
 
 ### Step 1 — Load the ticket & collect SQL
 
@@ -176,6 +223,7 @@ AskUserQuestion:
 
 Print:
 - **Ticket**: `<jira_key>` — `<summary>`
+- **Working subtask**: `<subtask key>` (assignee Tom, In Progress) — created this run, or reused if it already existed; "n/a" if the ticket was itself a subtask
 - **Files**: each `migration/<folder>/<file>.sql` (+ any `_verify.sql`) written into `<repo_path>`
 - **Claude AI Review**: Risk Level + one-line summary (full block in PR)
 - **Heavy-Op (SLA §6)**: Yes/No
