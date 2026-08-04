@@ -16,7 +16,7 @@ This skill turns a VOC / data-fix request into a **reviewed, rollback-able SQL m
 
 ## Rules (from SOP SQL Validation §1–§6, + Git Strategy + SLA §6)
 
-- **Subtask-first (company rule)**: if the ticket being VOC'd is a **parent Task** with no Subtask assigned to the **current MCP user** (resolve via `jira_get_user_profile("currentUser")` — do NOT hard-code Tom), **create one first** — Subtask, assignee = current user, status **In Progress** (Step 0). The migration work is tracked under that subtask. If the ticket is already a Subtask, skip. **Never create a duplicate if a subtask already assigned to the current user exists — reuse it** (just ensure In Progress).
+- **Subtask-first (company rule)**: if the ticket being VOC'd is a **parent Task** with no Subtask assigned to the **current MCP user** (resolve via `jira_get_user_profile("currentUser")` — do NOT hard-code Tom), **create one first** — Subtask, assignee = current user, status **In Progress** (Step 0). The migration work is tracked under that subtask. If the ticket is already a Subtask, skip. **Never create a duplicate if a subtask already assigned to the current user exists — reuse it** (just ensure In Progress). Also fill its **schedule fields** (Step 0.3): Start date = today; Due date + Stg release date = parent's Stg release date if set, else Medium (start + 1–2 days); Estimated duration in **days** (1 day = 8 h, so 1 h = 0.125).
 - Applies to Production-mutating SQL: `UPDATE` / `DELETE` / bulk `INSERT` / `ALTER TABLE` / data-migration / VOC scripts (SOP §1)
 - **Prerequisites (SOP §2)**: a Jira ticket, committed to Git, PR approved, **merged to master before any execution**, following the Git Strategy. Direct PROD execution outside the Git process is **prohibited**.
 - **Step 1 — Claude AI SQL Review (SOP §3)**: review Full-Table-Scan / Missing-Index / Lock / Estimated-Impact / Recommendations, and the review block **must be attached to the PR**.
@@ -81,10 +81,31 @@ connected is the assignee.
    `jira_get_transitions(<subtask key>)` → find the `In Progress` transition id (typically **21** on
    the ELS board) → `jira_transition_issue(<subtask key>, transition_id)`.
 
-3. **Confirm before creating** (outward write) via AskUserQuestion — preview the subtask summary +
-   parent + assignee. Skip the prompt only if the user explicitly asked to auto-create it.
+3. **Fill the schedule fields (company rule)** — set these on the subtask via
+   `jira_update_issue(<subtask key>, fields={...})`. **ELS field IDs** (resolve once with
+   `jira_get_create_fields(project_key="ELS", issue_type_id=<Subtask id, 10013>)` if unsure — they are
+   project-scoped, do NOT reuse another project's `customfield_*`):
+   - **Start date** = `customfield_10015` → **today** (the day work starts). Get "today" from context
+     (the session's current-date reminder) — script globals have no clock.
+   - **Due date** = `duedate` (system) **AND** **Stg release date** = `customfield_10178` → set BOTH to
+     the **same value**: the staging release date. **Priority order:**
+       1. If the **parent Task has a Stg release date** (`customfield_10178`) → use the parent's value.
+       2. Else → default **Medium: start + 1–2 working days** (a typical VOC data-fix is ~1 day, so
+          start + 1 is the usual pick; use +2 for a larger multi-part change).
+   - **Estimated duration** = `customfield_10179` → **in DAYS**, where **1 working day = 8 h**
+     (so 1 h = **0.125**, 2 h = **0.25**, 4 h = 0.5, a full day = 1). Estimate the *actual effort* of the
+     fix (not the due-date window): a single-column/method flip or allotment revert ≈ 1–2 h (**0.125–0.25**);
+     a multi-statement / multi-room migration ≈ 0.5. Confirm the number via AskUserQuestion when unsure.
+   Example (payment-method flip, parent has no Stg date, started 2026-08-04):
+   `fields = {"customfield_10015":"2026-08-04", "duedate":"2026-08-05",
+              "customfield_10178":"2026-08-05", "customfield_10179":0.25}`.
+   When **reusing** an existing subtask (Step 1 branch 2), still backfill any of these that are empty.
 
-4. **From here on, the migration work (branch name, commit, PR) still references the PARENT
+4. **Confirm before creating** (outward write) via AskUserQuestion — preview the subtask summary +
+   parent + assignee + the schedule fields. Skip the prompt only if the user explicitly asked to
+   auto-create it.
+
+5. **From here on, the migration work (branch name, commit, PR) still references the PARENT
    `jira_key`** for the `VOC(<parent>):` title and folder — the subtask is the Jira-side work tracker,
    not the branch key. (Optionally note the subtask key in the PR body / report.)
 
