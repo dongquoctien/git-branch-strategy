@@ -105,10 +105,13 @@ connected is the assignee.
    parent + assignee + the schedule fields. Skip the prompt only if the user explicitly asked to
    auto-create it.
 
-5. **Move the whole chain to In Progress (company rule).** Once you start the VOC work, transition
-   every not-yet-started ticket in the chain to In Progress — the **Subtask** (done above), the
-   **parent ELS Task**, and, if this VOC was cloned from a BTBS, the **original BTBS**. Transition IDs
-   differ per board: **ELS "In Progress" = 21**, **BTBS "IN PROGRESS" = 2** — fetch with
+5. **Move the whole chain to In Progress (company rule) — THIS is the moment status changes.**
+   Status is deliberately NOT touched at clone time (`[[jira-clone-btbs-els]]` leaves everything in
+   To Do). It moves only now, because a *doing / voc / create-script* command was issued against the
+   clone. Transition every not-yet-started ticket in the chain to In Progress — the **Subtask** (done
+   above), the **parent ELS Task**, and, if this VOC was cloned from a BTBS, the **original BTBS**
+   (find it via the Cloners link: the subtask's parent's "is cloned by" → the BTBS key). Transition
+   IDs differ per board: **ELS "In Progress" = 21**, **BTBS "IN PROGRESS" = 2** — fetch with
    `jira_get_transitions` if unsure. Skip any already In Progress or further along.
 
 6. **From here on, the migration work (branch name, commit, PR) still references the PARENT
