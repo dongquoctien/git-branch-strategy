@@ -16,7 +16,7 @@ This skill turns a VOC / data-fix request into a **reviewed, rollback-able SQL m
 
 ## Rules (from SOP SQL Validation §1–§6, + Git Strategy + SLA §6)
 
-- **Subtask-first (company rule)**: if the ticket being VOC'd is a **parent Task** with no Subtask assigned to the **current MCP user** (resolve via `jira_get_user_profile("currentUser")` — do NOT hard-code Tom), **create one first** — Subtask, assignee = current user, status **In Progress** (Step 0). The migration work is tracked under that subtask. If the ticket is already a Subtask, skip. **Never create a duplicate if a subtask already assigned to the current user exists — reuse it** (just ensure In Progress). Also fill its **schedule fields** (Step 0.3): Start date = today; Due date + Stg release date = parent's Stg release date if set, else Medium (start + 1–2 days); Estimated duration in **days** (1 day = 8 h, so 1 h = 0.125). And move the whole chain to **In Progress** — subtask + parent ELS Task (transition **21**) + original BTBS if cloned (transition **2**); skip any already started (Step 0.5).
+- **Subtask-first (company rule)**: if the ticket being VOC'd is a **parent-level issue** — i.e. `issuetype.subtask == false`, which covers **Task, VOC, Bug, Story, Hotfix** (branch on the boolean, NOT the type name) — with no Subtask assigned to the **current MCP user** (resolve via `jira_get_user_profile("currentUser")` — do NOT hard-code Tom), **create one first** — Subtask, assignee = current user, status **In Progress** (Step 0). The migration work is tracked under that subtask. If the ticket is already a Subtask, skip. **Never create a duplicate if a subtask already assigned to the current user exists — reuse it** (just ensure In Progress). Also fill its **schedule fields** (Step 0.3): Start date = today; Due date + Stg release date = parent's Stg release date if set, else Medium (start + 1–2 days); Estimated duration in **days** (1 day = 8 h, so 1 h = 0.125). And move the whole chain to **In Progress** — subtask + parent ELS Task (transition **21**) + original BTBS if cloned (transition **2**); skip any already started (Step 0.5).
 - Applies to Production-mutating SQL: `UPDATE` / `DELETE` / bulk `INSERT` / `ALTER TABLE` / data-migration / VOC scripts (SOP §1)
 - **Prerequisites (SOP §2)**: a Jira ticket, committed to Git, PR approved, **merged to master before any execution**, following the Git Strategy. Direct PROD execution outside the Git process is **prohibited**.
 - **Step 1 — Claude AI SQL Review (SOP §3)**: review Full-Table-Scan / Missing-Index / Lock / Estimated-Impact / Recommendations, and the review block **must be attached to the PR**.
@@ -48,11 +48,16 @@ This skill turns a VOC / data-fix request into a **reviewed, rollback-able SQL m
 
 ### Step 0 — Ensure a working Subtask exists on the VOC parent (company rule)
 
-**Company rule:** whenever you VOC a **parent** ticket (a Task, not a Subtask), the actual work must
-live in a **Subtask assigned to the current engineer (the person whose token is connected to this MCP)
-with status In Progress**. This subtask is where the SQL/migration work is tracked. Do this **before**
-collecting SQL so you never repeat it later. (Reference: ELS-2692 → subtask ELS-2693;
-ELS-2946 → subtask ELS-2948.)
+**Company rule:** whenever you VOC a **parent** ticket (anything that is NOT a Subtask — Task, **VOC**,
+Bug, Story, Hotfix …), the actual work must live in a **Subtask assigned to the current engineer (the
+person whose token is connected to this MCP) with status In Progress**. This subtask is where the
+SQL/migration work is tracked. Do this **before** collecting SQL so you never repeat it later.
+(Reference: ELS-2692 → ELS-2693; ELS-2946 → ELS-2948; ELS-2756 (type VOC) → ELS-2975.)
+
+> **Do Step 0 up front, and don't let a flaky MCP skip it.** If `mcp-atlassian` drops mid-run,
+> pause the Jira-side work and resume it once reconnected — do NOT proceed to write SQL / open the PR
+> and silently leave the subtask uncreated. Missing subtask = the rule was not satisfied, even if the
+> SQL shipped.
 
 **"The engineer" = the current MCP user, resolved at runtime — do NOT hard-code an email/name.**
 Get their accountId once with `jira_get_user_profile(user_identifier="currentUser")` (or
@@ -60,10 +65,15 @@ Get their accountId once with `jira_get_user_profile(user_identifier="currentUse
 current user is usually Tom (`tien.dq@ohmyhotel.com`), but the skill must stay flexible — whoever is
 connected is the assignee.
 
-1. **Detect.** From the Step-1 fetch (or a quick `jira_get_issue(jira_key, fields="issuetype,subtasks,assignee")`):
-   - If `jira_key` **is itself a Subtask** (`issuetype.subtask == true`) → skip Step 0 entirely; work directly on it (transition it to In Progress if it isn't already).
-   - If `jira_key` is a **parent Task** and **already has a subtask assigned to the current user** → **reuse it, do NOT create another**; just ensure it is In Progress. (Match on the resolved accountId — a subtask assigned to someone else does NOT count.)
-   - If `jira_key` is a **parent Task with no subtask assigned to the current user** → create one (next).
+1. **Detect — branch ONLY on the `issuetype.subtask` boolean, NEVER on the issue-type NAME.**
+   The parent may be type **Task, VOC, Bug, Story, Hotfix, …** — every one of those has
+   `issuetype.subtask == false` and is a **parent-level** issue that needs a working subtask. Do NOT
+   special-case the literal name "Task"; ELS VOC tickets are type **"VOC"** (e.g. ELS-2756), which is
+   still a parent (`subtask == false`) and MUST get a subtask. From the Step-1 fetch (or a quick
+   `jira_get_issue(jira_key, fields="issuetype,subtasks,assignee")`):
+   - `issuetype.subtask == true` → `jira_key` **is itself a Subtask** → skip creation; work on it directly (ensure In Progress).
+   - `issuetype.subtask == false` (ANY parent type incl. VOC) **and** it already has a subtask assigned to the current user → **reuse it, do NOT create another**; ensure In Progress. (Match on the resolved accountId — a subtask assigned to someone else does NOT count.)
+   - `issuetype.subtask == false` **and** no subtask assigned to the current user → **create one (next)**. This is the default for a freshly-cloned VOC parent.
 
 2. **Create the working subtask** (mirror the ELS-2693 style — action-oriented summary
    "Verify data and logic to <the change requested> for <hotel/booking>"):
