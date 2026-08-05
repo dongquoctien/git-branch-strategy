@@ -16,7 +16,7 @@ This skill turns a VOC / data-fix request into a **reviewed, rollback-able SQL m
 
 ## Rules (from SOP SQL Validation §1–§6, + Git Strategy + SLA §6)
 
-- **Subtask-first (company rule)**: if the ticket being VOC'd is a **parent Task** with no Subtask assigned to the **current MCP user** (resolve via `jira_get_user_profile("currentUser")` — do NOT hard-code Tom), **create one first** — Subtask, assignee = current user, status **In Progress** (Step 0). The migration work is tracked under that subtask. If the ticket is already a Subtask, skip. **Never create a duplicate if a subtask already assigned to the current user exists — reuse it** (just ensure In Progress). Also fill its **schedule fields** (Step 0.3): Start date = today; Due date + Stg release date = parent's Stg release date if set, else Medium (start + 1–2 days); Estimated duration in **days** (1 day = 8 h, so 1 h = 0.125).
+- **Subtask-first (company rule)**: if the ticket being VOC'd is a **parent Task** with no Subtask assigned to the **current MCP user** (resolve via `jira_get_user_profile("currentUser")` — do NOT hard-code Tom), **create one first** — Subtask, assignee = current user, status **In Progress** (Step 0). The migration work is tracked under that subtask. If the ticket is already a Subtask, skip. **Never create a duplicate if a subtask already assigned to the current user exists — reuse it** (just ensure In Progress). Also fill its **schedule fields** (Step 0.3): Start date = today; Due date + Stg release date = parent's Stg release date if set, else Medium (start + 1–2 days); Estimated duration in **days** (1 day = 8 h, so 1 h = 0.125). And move the whole chain to **In Progress** — subtask + parent ELS Task (transition **21**) + original BTBS if cloned (transition **2**); skip any already started (Step 0.5).
 - Applies to Production-mutating SQL: `UPDATE` / `DELETE` / bulk `INSERT` / `ALTER TABLE` / data-migration / VOC scripts (SOP §1)
 - **Prerequisites (SOP §2)**: a Jira ticket, committed to Git, PR approved, **merged to master before any execution**, following the Git Strategy. Direct PROD execution outside the Git process is **prohibited**.
 - **Step 1 — Claude AI SQL Review (SOP §3)**: review Full-Table-Scan / Missing-Index / Lock / Estimated-Impact / Recommendations, and the review block **must be attached to the PR**.
@@ -105,7 +105,13 @@ connected is the assignee.
    parent + assignee + the schedule fields. Skip the prompt only if the user explicitly asked to
    auto-create it.
 
-5. **From here on, the migration work (branch name, commit, PR) still references the PARENT
+5. **Move the whole chain to In Progress (company rule).** Once you start the VOC work, transition
+   every not-yet-started ticket in the chain to In Progress — the **Subtask** (done above), the
+   **parent ELS Task**, and, if this VOC was cloned from a BTBS, the **original BTBS**. Transition IDs
+   differ per board: **ELS "In Progress" = 21**, **BTBS "IN PROGRESS" = 2** — fetch with
+   `jira_get_transitions` if unsure. Skip any already In Progress or further along.
+
+6. **From here on, the migration work (branch name, commit, PR) still references the PARENT
    `jira_key`** for the `VOC(<parent>):` title and folder — the subtask is the Jira-side work tracker,
    not the branch key. (Optionally note the subtask key in the PR body / report.)
 
