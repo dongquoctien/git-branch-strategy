@@ -14,7 +14,7 @@
       "name": "omh-git-workflow",
       "source": "./plugins/omh-git-workflow",
       "description": "22 slash commands that automate the OMH git branch strategy: new-branch, new-worktree, commit, squash, open-pr, open-pr-to, check-pr, fix-pr, ci-status, reviewers, release, cherry-pick, reset-develop, reset-staging, sync-local, sync-master, hotfix, rollback, delete-branch, clean-worktree, voc-migration, status.",
-      "version": "3.0.4",
+      "version": "3.0.5",
       "author": {
         "name": "OhMyHotel DevTools",
         "email": "devtools@ohmyhotel.com"
