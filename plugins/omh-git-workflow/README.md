@@ -53,7 +53,31 @@ See the repo-root [README.md](../../README.md) for the full strategy document (�
 - **Hard rule enforcement**: skills refuse operations violating the branch strategy (e.g. PR to develop, cherry-pick from work branch, hotfix from master)
 - **Read-first**: `/omh-status` and `/omh-check-pr` never modify state — safe to run anytime
 
+## Bundled scripts
+
+| Script | Purpose |
+|---|---|
+| `scripts/pr-attach-images.sh` | Upload screenshots to GitHub and print Markdown to embed in a PR body. Used by `/omh-open-pr` Step 4b for the *Test evidence* section. |
+
+`pr-attach-images.sh` takes local files, Jira attachments (`--jira ELS-1234`), or both,
+and prints `<img>` / `![]()` Markdown on stdout:
+
+```bash
+scripts/pr-attach-images.sh --jira ELS-1234 --width 700 --title "Test evidence" > evidence.md
+scripts/pr-attach-images.sh --width 700 shot1.png shot2.png
+scripts/pr-attach-images.sh --jira ELS-1234 --dry-run   # preview, uploads nothing
+```
+
+**GitHub only.** GitHub exposes no official image-upload API, so the script drives the
+undocumented `uploads.github.com/user-attachments/assets` endpoint the web UI uses,
+authenticating with the token `gh` already holds. That endpoint is unsupported and could
+break without notice — on failure the script exits non-zero and suggests a fallback
+rather than producing a broken PR body. On a Bitbucket remote it exits 1 with a warning;
+attach the images to the Jira ticket and link it instead.
+
 ## Dependencies
 
 - `mcp-atlassian` MCP server — for Jira validation
 - `mcp-bitbucket` or GitHub `gh` CLI — for PR operations
+- `gh` CLI + `curl` + `python` — for `scripts/pr-attach-images.sh`
+- `JIRA_URL` / `JIRA_USERNAME` / `JIRA_API_TOKEN` in env — only for the script's `--jira` mode

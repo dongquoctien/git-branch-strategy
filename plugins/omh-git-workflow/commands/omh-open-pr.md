@@ -113,10 +113,70 @@ AskUserQuestion:
     - label: "Unit test output" (Recommended) — description: "I run the test suite now and capture output"
     - label: "CI build link" — description: "Paste URL via Other"
     - label: "Manual test steps" — description: "Describe steps taken (Other for free-text)"
-    - label: "Screenshots" — description: "Paste paths or drop into chat after"
+    - label: "Screenshots" — description: "Embed images in the PR body (local files or Jira attachments)"
 ```
 
 Note: if user picks nothing / only "Other: none available" → flag the PR body as *"⚠️ Test evidence: pending — requires Tech Lead sign-off per §13"*. Never fabricate evidence.
+
+#### Step 4b — Embed screenshots (only if "Screenshots" was chosen)
+
+GitHub has no official API for attaching images to a PR body, so use the bundled
+helper, which drives the same `uploads.github.com` endpoint the web UI uses:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/pr-attach-images.sh --help
+```
+
+**GitHub only.** If `origin` is Bitbucket the script exits 1 with a warning — that is
+expected. Fall back to attaching the images to the Jira ticket and linking it from the
+*Test evidence* section; do not try to work around it.
+
+**Always confirm before uploading** — the upload is outward-facing and cannot be undone
+from the CLI. Ask where the images come from:
+
+```
+AskUserQuestion:
+  question: "Where should the screenshots come from?"
+  header:   "Screenshots"
+  multiSelect: false
+  options:
+    - label: "From the Jira ticket" (Recommended) — description: "Pull image attachments off <JIRA-KEY> and embed them"
+    - label: "Local files" — description: "Give paths (e.g. from /tom-dev-flow:tom-snapshot); paste via Other"
+    - label: "Both" — description: "Jira attachments plus local files"
+    - label: "Skip images" — description: "Use text evidence only"
+```
+
+Then preview with `--dry-run` and show the user the exact file list before uploading:
+
+```bash
+# Jira attachments (needs JIRA_URL / JIRA_USERNAME / JIRA_API_TOKEN in env)
+"${CLAUDE_PLUGIN_ROOT}/scripts/pr-attach-images.sh" \
+  --jira <JIRA-KEY> --width 700 --title "Test evidence" --dry-run
+
+# Local files
+"${CLAUDE_PLUGIN_ROOT}/scripts/pr-attach-images.sh" \
+  --width 700 --title "Test evidence" --dry-run shot1.png shot2.png
+```
+
+Confirm the list, then re-run **without** `--dry-run` and capture stdout:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/pr-attach-images.sh" \
+  --jira <JIRA-KEY> --width 700 --title "Test evidence" > /tmp/evidence.md
+```
+
+Paste that Markdown into the *Test evidence* section of the PR body.
+
+Notes:
+- `--width 700` keeps screenshots readable without dominating the page; GitHub derives
+  the height, so aspect ratio is preserved. Omit `--width` for full size.
+- `--jira-only a.png,b.png` narrows which attachments are taken; without it every image
+  on the ticket is pulled. Prefer naming them — QA tickets often carry dozens.
+- Images render for logged-out viewers, so external reviewers can see them.
+- Progress goes to stderr and Markdown to stdout, so redirecting gives a clean fragment.
+- If the script exits 2, the upload endpoint failed. It is undocumented and may have
+  changed — do NOT retry in a loop. Fall back to linking the Jira ticket, and tell the
+  user the endpoint appears to be broken.
 
 **Risk level** — infer a default, confirm via `AskUserQuestion`:
 
