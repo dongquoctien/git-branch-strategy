@@ -16,7 +16,8 @@ This skill turns a VOC / data-fix request into a **reviewed, rollback-able SQL m
 
 ## Rules (from SOP SQL Validation §1–§6, + Git Strategy + SLA §6)
 
-- **Subtask-first (company rule)**: if the ticket being VOC'd is a **parent-level issue** — i.e. `issuetype.subtask == false`, which covers **Task, VOC, Bug, Story, Hotfix** (branch on the boolean, NOT the type name) — with no Subtask assigned to the **current MCP user** (resolve via `jira_get_user_profile("currentUser")` — do NOT hard-code Tom), **create one first** — Subtask, assignee = current user, status **In Progress** (Step 0). The migration work is tracked under that subtask. If the ticket is already a Subtask, skip. **Never create a duplicate if a subtask already assigned to the current user exists — reuse it** (just ensure In Progress). Also fill its **schedule fields** (Step 0.3): Start date = today; Due date + Stg release date = parent's Stg release date if set, else Medium (start + 1–2 days); Estimated duration in **days** (1 day = 8 h, so 1 h = 0.125). And move the whole chain to **In Progress** — subtask + parent ELS Task (transition **21**) + original BTBS if cloned (transition **2**); skip any already started (Step 0.5).
+- **Work on the ticket you were given (company rule, updated 2026-08-28)**: VOC work is **no longer** split into a separate Subtask — do **NOT** create one. Whatever key is passed is the working ticket, parent-level (Task, **VOC**, Bug, Story, Hotfix) or an older Subtask. On it, **backfill only the empty** schedule fields (Step 0): Start date = today; Due date + Stg release date = parent's Stg release date if there is a parent with one, else Medium (start + 1–2 days); Estimated duration in **days** (1 day = 8 h, so 1 h = 0.125). Never overwrite a value that is already set. Then move the chain to **In Progress** — the working ticket (ELS transition **21**), the parent if the ticket is an older Subtask, and the original BTBS if cloned (transition **2**); skip any already started.
+- **Read the linked BTBS source ticket (Step 1)**: an ELS VOC is usually a summary and often has **no attachments** — the room/promotion/booking code spreadsheets and the requester's original wording live on the **BTBS** issue, linked via **`Blocks`** (outward `blocks`) or **`Cloners`** (outward `clones`). Never write SQL against codes from a file you have not opened.
 - Applies to Production-mutating SQL: `UPDATE` / `DELETE` / bulk `INSERT` / `ALTER TABLE` / data-migration / VOC scripts (SOP §1)
 - **Prerequisites (SOP §2)**: a Jira ticket, committed to Git, PR approved, **merged to master before any execution**, following the Git Strategy. Direct PROD execution outside the Git process is **prohibited**.
 - **Step 1 — Claude AI SQL Review (SOP §3)**: review Full-Table-Scan / Missing-Index / Lock / Estimated-Impact / Recommendations, and the review block **must be attached to the PR**.
@@ -46,95 +47,92 @@ This skill turns a VOC / data-fix request into a **reviewed, rollback-able SQL m
 
 ## Workflow
 
-### Step 0 — Ensure a working Subtask exists on the VOC parent (company rule)
+### Step 0 — Prepare the ticket (schedule fields + status)
 
-**Company rule:** whenever you VOC a **parent** ticket (anything that is NOT a Subtask — Task, **VOC**,
-Bug, Story, Hotfix …), the actual work must live in a **Subtask assigned to the current engineer (the
-person whose token is connected to this MCP) with status In Progress**. This subtask is where the
-SQL/migration work is tracked. Do this **before** collecting SQL so you never repeat it later.
-(Reference: ELS-2692 → ELS-2693; ELS-2946 → ELS-2948; ELS-2756 (type VOC) → ELS-2975.)
+**Company rule (updated 2026-08-28): work directly on the ticket you were given.** VOC work is
+**no longer** split into a separate Subtask — do **NOT** create one. Whatever key the user passes
+(`jira_key`) is the working ticket: a parent-level issue (Task, **VOC**, Bug, Story, Hotfix …) or an
+older Subtask created back when the subtask rule applied. Either way, work on it directly.
 
 > **Do Step 0 up front, and don't let a flaky MCP skip it.** If `mcp-atlassian` drops mid-run,
-> pause the Jira-side work and resume it once reconnected — do NOT proceed to write SQL / open the PR
-> and silently leave the subtask uncreated. Missing subtask = the rule was not satisfied, even if the
-> SQL shipped.
+> pause the Jira-side work and resume it once reconnected — do NOT proceed to write SQL / open the
+> PR and silently leave the ticket unprepared.
 
-**"The engineer" = the current MCP user, resolved at runtime — do NOT hard-code an email/name.**
-Get their accountId once with `jira_get_user_profile(user_identifier="currentUser")` (or
-`get_me`-equivalent), and compare subtasks' assignee against **that** accountId. In this project the
-current user is usually Tom (`tien.dq@ohmyhotel.com`), but the skill must stay flexible — whoever is
-connected is the assignee.
+1. **Fetch the ticket** — `jira_get_issue(jira_key, fields="issuetype,summary,assignee,duedate,customfield_10015,customfield_10178,customfield_10179,status")`.
+   No branching on `issuetype.subtask` any more: the key you were given is the one you work on.
 
-1. **Detect — branch ONLY on the `issuetype.subtask` boolean, NEVER on the issue-type NAME.**
-   The parent may be type **Task, VOC, Bug, Story, Hotfix, …** — every one of those has
-   `issuetype.subtask == false` and is a **parent-level** issue that needs a working subtask. Do NOT
-   special-case the literal name "Task"; ELS VOC tickets are type **"VOC"** (e.g. ELS-2756), which is
-   still a parent (`subtask == false`) and MUST get a subtask. From the Step-1 fetch (or a quick
-   `jira_get_issue(jira_key, fields="issuetype,subtasks,assignee")`):
-   - `issuetype.subtask == true` → `jira_key` **is itself a Subtask** → skip creation; work on it directly (ensure In Progress).
-   - `issuetype.subtask == false` (ANY parent type incl. VOC) **and** it already has a subtask assigned to the current user → **reuse it, do NOT create another**; ensure In Progress. (Match on the resolved accountId — a subtask assigned to someone else does NOT count.)
-   - `issuetype.subtask == false` **and** no subtask assigned to the current user → **create one (next)**. This is the default for a freshly-cloned VOC parent.
-
-2. **Create the working subtask** (mirror the ELS-2693 style — action-oriented summary
-   "Verify data and logic to <the change requested> for <hotel/booking>"):
-   ```
-   jira_create_issue(
-     project_key = "ELS",              # same project as the parent
-     issue_type  = "Subtask",          # capital S, one word — NOT "Sub-task"
-     summary     = "Verify data and logic to <change> for <hotel/booking scope>",
-     description = "<one-paragraph scope: what to change, the booking/hotel list, guard notes>",
-     assignee    = "<current user's email / accountId>",   # resolved above, not hard-coded
-     additional_fields = {"parent": "<parent JIRA-KEY>"}
-   )
-   ```
-   A subtask is created in the default status (usually **To Do**), so **transition it to In Progress**:
-   `jira_get_transitions(<subtask key>)` → find the `In Progress` transition id (typically **21** on
-   the ELS board) → `jira_transition_issue(<subtask key>, transition_id)`.
-
-3. **Fill the schedule fields (company rule)** — set these on the subtask via
-   `jira_update_issue(<subtask key>, fields={...})`. **ELS field IDs** (resolve once with
-   `jira_get_create_fields(project_key="ELS", issue_type_id=<Subtask id, 10013>)` if unsure — they are
-   project-scoped, do NOT reuse another project's `customfield_*`):
-   - **Start date** = `customfield_10015` → **today** (the day work starts). Get "today" from context
-     (the session's current-date reminder) — script globals have no clock.
-   - **Due date** = `duedate` (system) **AND** **Stg release date** = `customfield_10178` → set BOTH to
-     the **same value**: the staging release date. **Priority order:**
-       1. If the **parent Task has a Stg release date** (`customfield_10178`) → use the parent's value.
-       2. Else → default **Medium: start + 1–2 working days** (a typical VOC data-fix is ~1 day, so
-          start + 1 is the usual pick; use +2 for a larger multi-part change).
+2. **Backfill the schedule fields — ONLY the ones that are still empty.** Never overwrite a value
+   the ticket already has; the operator may have set it deliberately. Write with
+   `jira_update_issue(jira_key, fields={...})`, including **only** the empty ones. **ELS field IDs**
+   (project-scoped — resolve with `jira_get_create_fields(project_key="ELS", issue_type_id=<id>)` if
+   unsure, do NOT reuse another project's `customfield_*`):
+   - **Start date** = `customfield_10015` → **today** (the day work starts). Take "today" from the
+     session's current-date reminder — script globals have no clock.
+   - **Due date** = `duedate` (system) **AND** **Stg release date** = `customfield_10178` → same
+     value, the staging release date. **Priority:** (1) if this ticket has a parent and that parent
+     has a Stg release date, use it; (2) else default **Medium: start + 1–2 working days** (a typical
+     VOC data-fix is ~1 day, so start + 1; use +2 for a larger multi-part change).
    - **Estimated duration** = `customfield_10179` → **in DAYS**, where **1 working day = 8 h**
-     (so 1 h = **0.125**, 2 h = **0.25**, 4 h = 0.5, a full day = 1). Estimate the *actual effort* of the
-     fix (not the due-date window): a single-column/method flip or allotment revert ≈ 1–2 h (**0.125–0.25**);
-     a multi-statement / multi-room migration ≈ 0.5. Confirm the number via AskUserQuestion when unsure.
-   Example (payment-method flip, parent has no Stg date, started 2026-08-04):
-   `fields = {"customfield_10015":"2026-08-04", "duedate":"2026-08-05",
-              "customfield_10178":"2026-08-05", "customfield_10179":0.25}`.
-   When **reusing** an existing subtask (Step 1 branch 2), still backfill any of these that are empty.
+     (1 h = **0.125**, 2 h = **0.25**, 4 h = 0.5, a full day = 1). Estimate the *actual effort*, not
+     the due-date window: a single-column/method flip or allotment revert ≈ 1–2 h
+     (**0.125–0.25**); a multi-statement / multi-room migration ≈ 0.5. Confirm via AskUserQuestion
+     when unsure.
 
-4. **Confirm before creating** (outward write) via AskUserQuestion — preview the subtask summary +
-   parent + assignee + the schedule fields. Skip the prompt only if the user explicitly asked to
-   auto-create it.
+   Example (payment-method flip started 2026-08-28, ticket had none of the four set):
+   `fields = {"customfield_10015":"2026-08-28", "duedate":"2026-08-29",
+              "customfield_10178":"2026-08-29", "customfield_10179":0.25}`.
 
-5. **Move the whole chain to In Progress (company rule) — THIS is the moment status changes.**
-   Status is deliberately NOT touched at clone time (`[[jira-clone-btbs-els]]` leaves everything in
-   To Do). It moves only now, because a *doing / voc / create-script* command was issued against the
-   clone. Transition every not-yet-started ticket in the chain to In Progress — the **Subtask** (done
-   above), the **parent ELS Task**, and, if this VOC was cloned from a BTBS, the **original BTBS**
-   (find it via the Cloners link: the subtask's parent's "is cloned by" → the BTBS key). Transition
-   IDs differ per board: **ELS "In Progress" = 21**, **BTBS "IN PROGRESS" = 2** — fetch with
+   If all four are already filled, skip the write entirely and say so in the report.
+
+3. **Confirm before writing** (outward write) via AskUserQuestion — preview which fields are empty
+   and the value each will get. Skip the prompt only if the user explicitly asked to auto-fill.
+
+4. **Move the chain to In Progress — THIS is the moment status changes.** Status is deliberately NOT
+   touched at clone time (`[[jira-clone-btbs-els]]` leaves everything in To Do). It moves only now,
+   because a *doing / voc / create-script* command was issued. Transition every not-yet-started
+   ticket in the chain: the **working ticket** and the **source BTBS** it came from, found in
+   `issuelinks` under either **`Blocks`** (outward `blocks`) or **`Cloners`** (outward `clones`) —
+   see Step 1 for the lookup. If the working
+   ticket is an older Subtask, also transition its **parent** if it has not started. Transition IDs
+   differ per board: **ELS "In Progress" = 21**, **BTBS "IN PROGRESS" = 2** — fetch with
    `jira_get_transitions` if unsure. Skip any already In Progress or further along.
 
-6. **From here on, the migration work (branch name, commit, PR) still references the PARENT
-   `jira_key`** for the `VOC(<parent>):` title and folder — the subtask is the Jira-side work tracker,
-   not the branch key. (Optionally note the subtask key in the PR body / report.)
-
-> Note: the **Reporter** on a freshly-created ELS subtask cannot be set via the API (screen
-> restriction — same as `[[jira-clone-btbs-els]]`); it defaults to the creating (current) user, which
-> is fine here since that same user is the assignee doing the work.
+5. **The branch, commit and PR reference `jira_key`** for the `VOC(<jira_key>):` title and the
+   migration folder. If the working ticket is an older Subtask, use its **parent** key for the PR
+   title instead, so the PR still points at the parent-level issue.
 
 ### Step 1 — Load the ticket & collect SQL
 
 Read the ticket: `mcp__mcp-atlassian__jira_get_issue(issue_key=jira_key, fields="*all", comment_limit=50)`. Extract summary, description, attachments, and **every fenced ```` ```sql ```` block across all comments** (a ticket may carry several — e.g. "Tháng 4" / "Tháng 5" as separate comments, like ELS-2093).
+
+**Also read the linked BTBS source ticket.** An ELS VOC is usually only a summary of the original
+request: the ELS issue commonly has **zero attachments**, while the room codes / promotion codes /
+booking lists needed to write the SQL live as spreadsheets on the **BTBS** issue. Follow the link and
+read it before deciding there is not enough information.
+
+Find the BTBS key in the ELS ticket's `issuelinks` — it appears under either link type, so check both:
+- **`Blocks`** — outward `blocks` → the BTBS issue (e.g. ELS-3374 *blocks* BTBS-1249)
+- **`Cloners`** — outward `clones` → the BTBS issue (e.g. ELS-3257 *clones* BTBS-1218)
+
+The ELS description often names it too ("Source VOC: BTBS-1249"), but resolve from `issuelinks` — it
+is structured and always present when the link exists. If a link points at another **ELS** issue
+rather than a BTBS one, follow that as well; a VOC can be cloned from an earlier ELS VOC (ELS-3293
+clones ELS-3226 *and* blocks BTBS-1202).
+
+Then fetch it — `jira_get_issue(<BTBS-KEY>, fields="summary,description,attachment,comment", comment_limit=50)`
+— and harvest:
+- the **original request wording** from the reporter (the PIC, e.g. Naoki), which carries intent the
+  ELS summary drops
+- **attachments** — the `.xlsx` / `.csv` lists of hotel, room, plan and promotion codes that the SQL
+  has to target, plus red-boxed screenshots showing exactly what to change
+- **comments** — clarifications and follow-up corrections agreed with the requester
+
+Download an attachment you need with `jira_download_attachments(<BTBS-KEY>)`, or read a spreadsheet's
+codes directly. **Never invent codes** that are only present in an attachment you have not opened — if
+a needed file cannot be read, stop and say so rather than guessing.
+
+If the ELS ticket has no BTBS link and no SQL, treat it as under-specified: ask the user before
+generating anything.
 
 Present what was found and how to split it:
 
@@ -263,7 +261,9 @@ AskUserQuestion:
 
 Print:
 - **Ticket**: `<jira_key>` — `<summary>`
-- **Working subtask**: `<subtask key>` (assignee Tom, In Progress) — created this run, or reused if it already existed; "n/a" if the ticket was itself a subtask
+- **Schedule fields**: which of Start date / Due date / Stg release date / Estimated duration were empty and got filled this run — or "already set, unchanged" when nothing needed backfilling
+- **Status**: which tickets were transitioned to In Progress (working ticket / parent / original BTBS), or "already started"
+- **Source BTBS**: `<BTBS-KEY>` and which of its attachments/comments the SQL was built from — or "none linked"
 - **Files**: each `migration/<folder>/<file>.sql` (+ any `_verify.sql`) written into `<repo_path>`
 - **Claude AI Review**: Risk Level + one-line summary (full block in PR)
 - **Heavy-Op (SLA §6)**: Yes/No
