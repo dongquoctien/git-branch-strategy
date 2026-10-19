@@ -16,7 +16,7 @@ This skill turns a VOC / data-fix request into a **reviewed, rollback-able SQL m
 
 ## Rules (from SOP SQL Validation §1–§6, + Git Strategy + SLA §6)
 
-- **Work on the ticket you were given (company rule, updated 2026-08-28)**: VOC work is **no longer** split into a separate Subtask — do **NOT** create one. Whatever key is passed is the working ticket, parent-level (Task, **VOC**, Bug, Story, Hotfix) or an older Subtask. On it, **backfill only the empty** schedule fields (Step 0): Start date = today; Due date + Stg release date = parent's Stg release date if there is a parent with one, else Medium (start + 1–2 days); Estimated duration in **days** (1 day = 8 h, so 1 h = 0.125). Never overwrite a value that is already set. Then move the chain to **In Progress** — the working ticket (ELS transition **21**), the parent if the ticket is an older Subtask, and the original BTBS if cloned (transition **2**); skip any already started.
+- **Work on the ticket you were given (company rule, updated 2026-08-28)**: VOC work is **no longer** split into a separate Subtask — do **NOT** create one. Whatever key is passed is the working ticket, parent-level (Task, **VOC**, Bug, Story, Hotfix) or an older Subtask. On it, **backfill only the empty** schedule fields (Step 0): Start date = today; Due date + Stg release date = parent's Stg release date if there is a parent with one, else Medium (start + 1–2 days); Estimated duration in **days** (1 day = 8 h, so 1 h = 0.125). Never overwrite a value that is already set. Then post the **Rule 1 `My understanding:` comment** on the working ticket (Communication Guideline v0.2, 2026-10-08 — Jira blocks In Progress without it), and only then move the chain to **In Progress** — the working ticket (ELS transition **21**), the parent if the ticket is an older Subtask, and the original BTBS if cloned (transition **2**); skip any already started.
 - **Read the linked BTBS source ticket (Step 1)**: an ELS VOC is usually a summary and often has **no attachments** — the room/promotion/booking code spreadsheets and the requester's original wording live on the **BTBS** issue, linked via **`Blocks`** (outward `blocks`) or **`Cloners`** (outward `clones`). Never write SQL against codes from a file you have not opened.
 - Applies to Production-mutating SQL: `UPDATE` / `DELETE` / bulk `INSERT` / `ALTER TABLE` / data-migration / VOC scripts (SOP §1)
 - **Prerequisites (SOP §2)**: a Jira ticket, committed to Git, PR approved, **merged to master before any execution**, following the Git Strategy. Direct PROD execution outside the Git process is **prohibited**.
@@ -87,7 +87,26 @@ older Subtask created back when the subtask rule applied. Either way, work on it
 3. **Confirm before writing** (outward write) via AskUserQuestion — preview which fields are empty
    and the value each will get. Skip the prompt only if the user explicitly asked to auto-fill.
 
-4. **Move the chain to In Progress — THIS is the moment status changes.** Status is deliberately NOT
+4. **Post the Rule 1 `My understanding:` comment FIRST — Jira blocks In Progress without it.**
+   Communication Guideline v0.2 (CTO, 2026-10-08) and `tom-jira-ticket-rules` §11. On the
+   **working ticket**, before any transition:
+
+   ```markdown
+   My understanding:
+   - I will: <the data fix, named concretely — which table, which bookings, which value>
+   - I won't: <what is out of scope — e.g. "I won't change the contract currency itself">
+   - By: <the Due date you just set>
+   - Questions: <unknowns and the assumptions being made; never leave this empty
+     when an assumption exists>
+   Please confirm or correct.
+   ```
+
+   Do **not** copy the VOC request back verbatim — `I won't` and `Questions` are the two
+   fields the evaluation inspects. Draft it, show it, confirm via AskUserQuestion, then
+   post with `jira_add_comment`. If the requester does not reply within **1 working day**,
+   proceed on what was written.
+
+5. **Move the chain to In Progress — THIS is the moment status changes.** Status is deliberately NOT
    touched at clone time (`[[jira-clone-btbs-els]]` leaves everything in To Do). It moves only now,
    because a *doing / voc / create-script* command was issued. Transition every not-yet-started
    ticket in the chain: the **working ticket** and the **source BTBS** it came from, found in
@@ -97,7 +116,7 @@ older Subtask created back when the subtask rule applied. Either way, work on it
    differ per board: **ELS "In Progress" = 21**, **BTBS "IN PROGRESS" = 2** — fetch with
    `jira_get_transitions` if unsure. Skip any already In Progress or further along.
 
-5. **The branch, commit and PR reference `jira_key`** for the `VOC(<jira_key>):` title and the
+6. **The branch, commit and PR reference `jira_key`** for the `VOC(<jira_key>):` title and the
    migration folder. If the working ticket is an older Subtask, use its **parent** key for the PR
    title instead, so the PR still points at the parent-level issue.
 
@@ -234,17 +253,42 @@ In `repo_path`:
   - The **Claude AI SQL Review block** from Step 2 (SOP §3 requires it attached).
   - The **Production Approval Checklist** (SOP §6, all 10 items as unchecked boxes).
   - The Heavy-Op note (SLA §6) if flagged.
-- **Pipeline progress file — exempt, and say so.** `/omh-open-pr` Step 1b stops a PR that has no
-  `work/features/.progress/<jira-key>.json`. A VOC migration is SQL only: no application code, no
-  build, no `be-*` pipeline, so there is nothing for that file to record and it is **not** created
-  here. Pass that exemption to `/omh-open-pr` so it skips Step 1b, and put one line in the PR body
-  under *Changed files / components*:
+- **Pipeline progress file — create it, recording the SQL review.** Every PR carries
+  `work/features/.progress/<jira-key>.json`; a VOC migration is no exception. It runs no build, so
+  the file records what this flow *does* gate on — the Step 2 Claude AI SQL Review (SOP §3) — under
+  `source: "sql-review"`:
 
-  `- Pipeline progress: n/a — SQL migration only, no application code (SOP §2 flow)`
+  ```json
+  {
+    "feature": "<jira-key lowercase>",
+    "source": "sql-review",
+    "createdAt": "<date -u +%Y-%m-%dT%H:%M:%SZ>",
+    "updatedAt": "<same>",
+    "pipeline": {
+      "status": "implemented",
+      "sqlReview": {
+        "riskLevel": "<Low|Medium|High>",
+        "indexUsed": "<Yes|No|Partial>",
+        "fullScan": "<Yes|No>",
+        "lockRisk": "<Low|Medium|High>",
+        "estimatedRows": <n>,
+        "recommendation": "<Safe to execute|Execute in batches|Fix before execution>",
+        "heavyOp": <true|false>,
+        "idempotent": <true|false>,
+        "reviewedAt": "<when Step 2 ran>"
+      },
+      "filesModified": ["<each migration .sql written in Step 4>"]
+    }
+  }
+  ```
 
-  This is the **only** exemption from the progress-file rule. The moment a PR touches application
-  code — even one line alongside the SQL — the file is required and `/omh-open-pr` Step 1b applies
-  normally.
+  **Every value is copied from the Step 2 review block**, never re-judged while writing the file —
+  it is a record of that review, and it is read as evidence. `heavyOp` is the Step 3 SLA §6
+  classification. Write it under `{repo}/work/features/.progress/`, stage it with the migration
+  scripts, and list it in *Changed files / components*. Never commit `.progress/.lock`.
+
+  If the PR also changes application code, it is not this case: `source: "manual"` with a real
+  `build`, per `/omh-open-pr` Step 1b.
 - **VOC PR format (override the default conventional-commit title):**
   - **Title** starts with `VOC(<JIRA-KEY>):` — NOT `migration(...)` / `fix(...)` / `feat(...)`.
     e.g. `VOC(ELS-2800): Prepay/VCC -> Prepay/Cash + issue vendor billing (Pandanus Resort)`.
@@ -274,12 +318,13 @@ Print:
 - **Ticket**: `<jira_key>` — `<summary>`
 - **Schedule fields**: which of Start date / Due date / Stg release date / Estimated duration were empty and got filled this run — or "already set, unchanged" when nothing needed backfilling
 - **Status**: which tickets were transitioned to In Progress (working ticket / parent / original BTBS), or "already started"
+- **Rule 1 comment**: posted on `<jira_key>` (comment id), or "already present" — this is what unblocks In Progress
 - **Source BTBS**: `<BTBS-KEY>` and which of its attachments/comments the SQL was built from — or "none linked"
 - **Files**: each `migration/<folder>/<file>.sql` (+ any `_verify.sql`) written into `<repo_path>`
 - **Claude AI Review**: Risk Level + one-line summary (full block in PR)
 - **Heavy-Op (SLA §6)**: Yes/No
 - **PR**: link (if opened) or "committed only"
-- **Pipeline progress file**: `n/a — SQL migration only` (state it explicitly, so a reader does not read it as an omission)
+- **Pipeline progress file**: `work/features/.progress/<jira-key>.json` written, with the Step 2 review recorded under `sqlReview` (risk level + recommendation)
 - **Production Approval Checklist (SOP §6)** — print all 10 items with current state. The skill can mark **#1 Jira / #2 committed / #5 Claude AI review** as done; the rest (#3 PR approved, #4 merged, #6–#10 **Staging execution + evidence**) are **human steps**.
 - **Reminder**: per SOP §2, the script **must be merged to master before any Production run**, and per SOP §6, **missing any checklist item ⇒ do not execute on Production**. Staging execution + CloudWatch evidence are done by the engineer, not this skill.
 
@@ -295,7 +340,7 @@ Print:
 - Do NOT mark the script "ready for Production" while any SOP §6 checklist item is incomplete
 - Do NOT bypass the Git process (commit → PR → approve → merge) — direct PROD execution is prohibited (SOP §2)
 - Do NOT cut the work branch from anything other than `origin/master` (never current HEAD / develop / staging); always fetch first (§11)
-- Do NOT claim the progress-file exemption for a PR that also changes application code — SQL-only is the whole basis of the exemption
+- Do NOT write `sqlReview` values that the Step 2 review did not produce, and do NOT open the PR before that review has run — the block is a record of the review, not a field to fill in
 
 ---
 
