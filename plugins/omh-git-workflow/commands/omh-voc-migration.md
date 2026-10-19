@@ -234,6 +234,17 @@ In `repo_path`:
   - The **Claude AI SQL Review block** from Step 2 (SOP §3 requires it attached).
   - The **Production Approval Checklist** (SOP §6, all 10 items as unchecked boxes).
   - The Heavy-Op note (SLA §6) if flagged.
+- **Pipeline progress file — exempt, and say so.** `/omh-open-pr` Step 1b stops a PR that has no
+  `work/features/.progress/<jira-key>.json`. A VOC migration is SQL only: no application code, no
+  build, no `be-*` pipeline, so there is nothing for that file to record and it is **not** created
+  here. Pass that exemption to `/omh-open-pr` so it skips Step 1b, and put one line in the PR body
+  under *Changed files / components*:
+
+  `- Pipeline progress: n/a — SQL migration only, no application code (SOP §2 flow)`
+
+  This is the **only** exemption from the progress-file rule. The moment a PR touches application
+  code — even one line alongside the SQL — the file is required and `/omh-open-pr` Step 1b applies
+  normally.
 - **VOC PR format (override the default conventional-commit title):**
   - **Title** starts with `VOC(<JIRA-KEY>):` — NOT `migration(...)` / `fix(...)` / `feat(...)`.
     e.g. `VOC(ELS-2800): Prepay/VCC -> Prepay/Cash + issue vendor billing (Pandanus Resort)`.
@@ -268,6 +279,7 @@ Print:
 - **Claude AI Review**: Risk Level + one-line summary (full block in PR)
 - **Heavy-Op (SLA §6)**: Yes/No
 - **PR**: link (if opened) or "committed only"
+- **Pipeline progress file**: `n/a — SQL migration only` (state it explicitly, so a reader does not read it as an omission)
 - **Production Approval Checklist (SOP §6)** — print all 10 items with current state. The skill can mark **#1 Jira / #2 committed / #5 Claude AI review** as done; the rest (#3 PR approved, #4 merged, #6–#10 **Staging execution + evidence**) are **human steps**.
 - **Reminder**: per SOP §2, the script **must be merged to master before any Production run**, and per SOP §6, **missing any checklist item ⇒ do not execute on Production**. Staging execution + CloudWatch evidence are done by the engineer, not this skill.
 
@@ -283,6 +295,7 @@ Print:
 - Do NOT mark the script "ready for Production" while any SOP §6 checklist item is incomplete
 - Do NOT bypass the Git process (commit → PR → approve → merge) — direct PROD execution is prohibited (SOP §2)
 - Do NOT cut the work branch from anything other than `origin/master` (never current HEAD / develop / staging); always fetch first (§11)
+- Do NOT claim the progress-file exemption for a PR that also changes application code — SQL-only is the whole basis of the exemption
 
 ---
 

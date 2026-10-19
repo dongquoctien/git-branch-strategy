@@ -40,6 +40,7 @@ If the change does not match any listed scope, pick a new lowercase single-word/
 | Blank line between subject and body | Mandatory if body exists |
 | `hotfix/*` branch uses `fix` commit type | Do NOT use `hotfix` type for hotfix branches — per §14 note |
 | No AI attribution trailer | Message must NOT contain `Co-Authored-By: Claude...`, `Co-authored-by: Claude...`, or any AI generator trailer — per §14 "No AI / tool attribution trailers" |
+| Never commit `.progress/.lock` | `{workDocDir}/.progress/.lock` is a per-run lock file — refuse to stage or commit it, in any commit |
 
 **Reject vague subjects:** `fix bug`, `update code`, `WIP`, `changes`, `misc`, `stuff`.
 
@@ -77,6 +78,28 @@ git branch --show-current
   If user picks "Stage specific files", immediately call `AskUserQuestion` again with `multiSelect: true` listing the files as options (up to 4; if more than 4, fall back to "Stage ALL" or Cancel prompt with warning).
 
 - Extract current branch name — used for Jira footer
+
+**Progress-file checks on the staged set:**
+
+- **`.progress/.lock` staged** → stop. It is a per-run lock, never part of a commit. Tell the user
+  to `git restore --staged` it; do not unstage it silently (§ no silent auto-fixes).
+- **Source files staged, and `{workDocDir}/.progress/<jira-key>.json` exists on disk but is
+  modified-and-unstaged** → say so and offer to include it, because the PR is graded on that file
+  and a commit that updates code without it leaves the record stale:
+
+  ```
+  AskUserQuestion:
+    question: "work/features/.progress/<jira-key>.json has uncommitted changes. Include it?"
+    header:   "Progress"
+    multiSelect: false
+    options:
+      - label: "Stage it too" (Recommended) — description: "Commit the progress file with this change"
+      - label: "Commit without it" — description: "Progress file stays uncommitted — the PR gate will stop you later"
+  ```
+
+- **No progress file anywhere for this Jira key** → do not block the commit. Committing is not the
+  gate; `/omh-open-pr` Step 1b is. Mention it once in the Step 8 report so it is not a surprise at
+  PR time.
 
 ### Step 2 — Derive type and scope
 
