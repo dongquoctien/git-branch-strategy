@@ -82,11 +82,30 @@ ls work/features/.progress/${JIRA_KEY_LC}.json 2>/dev/null
 - **Does not exist** → the change never ran the `be-*` pipeline. Build one now, do **not** skip the
   field and do **not** open the PR without it.
 
-**One exemption.** A caller may pass a SQL-migration exemption — `/omh-voc-migration` does, because
-a VOC migration is `.sql` files only, with no application code and no build to record. Then skip
-this step and write `- Pipeline progress: n/a — SQL migration only, no application code` under
-*Changed files / components* instead. Verify it before accepting: if the diff touches anything
-outside `migration/**` `.sql` files, the exemption does not hold and this step applies in full.
+**No exemption — a SQL-only migration records its review instead of a build.** When the diff is
+`.sql` files under `migration/**` and nothing else (`/omh-voc-migration` says so, and the diff is
+checked before it is believed), the file still has to exist: the change is graded on the Claude AI
+SQL Review of SOP §3, not on a build. Write it with `source: "sql-review"`, replacing `build` with
+a `sqlReview` block copied from the review the skill already produced:
+
+```json
+"sqlReview": {
+  "riskLevel": "Medium",
+  "indexUsed": "Yes",
+  "fullScan": "No",
+  "lockRisk": "Low",
+  "estimatedRows": 463,
+  "recommendation": "Safe to execute",
+  "heavyOp": false,
+  "idempotent": true,
+  "reviewedAt": "2026-10-19T09:28:00Z"
+}
+```
+
+Every value is copied from that review block, never re-judged here to fill the file in — the same
+rule as `build.result`. If the review has not been run yet, the PR is not ready: run it first. A
+diff that touches anything outside `migration/**` `.sql` is an ordinary change and takes
+`source: "manual"` with a real `build`.
 
 Also confirm `.progress/.lock` is **not** in the diff — it is a per-run lock, never committed. If
 it is, stop and tell the user to remove it from the commit.
@@ -332,7 +351,7 @@ Template:
 
 ## Changed files / components
 - <service>: <components>
-- work/features/.progress/<jira-key>.json: pipeline progress (<pipeline|manual> source)
+- work/features/.progress/<jira-key>.json: pipeline progress (<pipeline|manual|sql-review> source)
 
 ## Jira
 <JIRA-KEY>: <ticket-summary-link>
