@@ -24,6 +24,7 @@ What this means:
 - **All other targets are allowed**: `develop`, `staging`, `release/*`, hotfix/*, another work branch, anything.
 - **No rebase. No reset.** The source branch is **not** rebased onto the target and is **not** reset to match the target. The whole point is to preserve the source so it can later be PR'd onto master via `/omh-open-pr`.
 - **No §13 PR body template.** Title and body come straight from the commit(s) the user selects — same content as the commit.
+- **One §13 field still applies: the pipeline progress file.** It is checked in the git tree, not written into the PR body — so the "no §13 body template" rule above is untouched. Every PR is graded on `work/features/.progress/<jira-key>.json`, including PRs to `develop` and `staging` (Step 2).
 - **No Jira lookup, no auto-link.** This is a thin wrapper around the host's PR-create API.
 
 If you want strategy-enforced flows, use the right skill instead:
@@ -107,7 +108,23 @@ Stop conditions:
 - **Target not on remote** — refuse: *"`origin/<target>` not found. Push or create it first, or check spelling."*
 - **Source has 0 commits ahead of target** — refuse: *"Nothing to PR — `<source>` is not ahead of `<target>`."*
 
-That's it. No rebase check, no master-currency check, no Jira validation.
+- **No pipeline progress file for the branch's Jira key** — refuse. Every PR carries
+  `work/features/.progress/<jira-key>.json` (lowercase key), whatever the target:
+
+  ```bash
+  JIRA_KEY_LC=$(git branch --show-current | grep -oE '^[A-Za-z]+-[0-9]+' | tr 'A-Z' 'a-z')
+  git diff origin/<target>...HEAD --name-only | grep -E "\.progress/${JIRA_KEY_LC}\.json$"
+  ```
+
+  Not in the diff, but the file exists on the branch already (committed in an earlier PR to another
+  target) → that is fine, continue. Missing entirely → stop and point the user at
+  `/omh-open-pr` Step 1b, which builds it. Do not write the file here: this skill does not author
+  PR content. Also refuse if `.progress/.lock` appears in the diff — it is never committed.
+- **Branch name carries no Jira key** — skip this check and say so in the Step 7 report. The
+  escape-hatch nature of this skill means a branch may legitimately have no key.
+
+That's it. No rebase check, no master-currency check, no Jira validation beyond the progress-file
+name above.
 
 ### Step 3 — Pick the commit(s) for title + body
 

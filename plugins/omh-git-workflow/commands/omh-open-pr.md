@@ -22,6 +22,7 @@ Parse arguments from: $ARGUMENTS
 | Risk level | Always | Low / Medium / High |
 | Jira ticket(s) | Always | Linked ticket — PR blocks without it |
 | Rebase confirmation | Always | Branch must be rebased onto latest master |
+| Pipeline progress file | Always | `work/features/.progress/<jira-key>.json` committed on the branch — see Step 1b |
 | Rollback plan | High risk only | Required when risk = High |
 | Migration notes | DB/infra only | For schema/index/infra changes |
 
@@ -58,6 +59,87 @@ Extract:
 - Jira key from branch name
 - Commit list (for summary generation)
 - Files changed (for "changed components" field)
+
+### Step 1b — Require the pipeline progress file
+
+**Every PR must carry `{workDocDir}/.progress/<jira-key>.json`** (`workDocDir` defaults to
+`work/features`; read `.claude/backend-webflux-plugin.json` if the repo has one). It is the record
+the company grades the ticket on, so a PR without it is incomplete regardless of how small the
+change is. The rule covers **every target** — `master` here, and `staging` / `develop` through
+`/omh-open-pr-to`, which runs the same check as one of its Step 2 stop conditions.
+
+Check whether the branch has one:
+
+```bash
+JIRA_KEY_LC=$(echo "<JIRA-KEY>" | tr 'A-Z' 'a-z')
+git diff origin/<target-branch>...HEAD --name-only | grep -E "\.progress/${JIRA_KEY_LC}\.json$"
+ls work/features/.progress/${JIRA_KEY_LC}.json 2>/dev/null
+```
+
+- **Committed on the branch** → continue; list it in *Changed files / components* (Step 4).
+- **Exists but not committed** → stop, tell the user to stage and commit it. Do not `git add` it
+  yourself (§ no silent auto-fixes).
+- **Does not exist** → the change never ran the `be-*` pipeline. Build one now, do **not** skip the
+  field and do **not** open the PR without it.
+
+**One exemption.** A caller may pass a SQL-migration exemption — `/omh-voc-migration` does, because
+a VOC migration is `.sql` files only, with no application code and no build to record. Then skip
+this step and write `- Pipeline progress: n/a — SQL migration only, no application code` under
+*Changed files / components* instead. Verify it before accepting: if the diff touches anything
+outside `migration/**` `.sql` files, the exemption does not hold and this step applies in full.
+
+Also confirm `.progress/.lock` is **not** in the diff — it is a per-run lock, never committed. If
+it is, stop and tell the user to remove it from the commit.
+
+#### Building the file for a change that never ran the pipeline
+
+Write `work/features/.progress/<jira-key>.json` with `source: "manual"` (schema:
+`backend-webflux-plugin/templates/progress-schema.md` § Optional Fields). Derive every field from
+what is actually in the branch:
+
+| Field | Where it comes from |
+|---|---|
+| `feature` | the Jira key, lowercase — `els-4075` |
+| `source` | `"manual"` |
+| `createdAt` / `updatedAt` | `date -u +%Y-%m-%dT%H:%M:%SZ` |
+| `pipeline.status` | `"implemented"` |
+| `pipeline.filesModified` | `git diff origin/<target-branch>...HEAD --name-only` |
+| `pipeline.build.command` | the test/build command actually run for this change |
+| `pipeline.build.result` | `PASS` / `FAIL` / `NOT_RUN` — see below |
+| `pipeline.build.timestamp` | when that command ran |
+
+Omit `scenarios` and `workDocument` — a manual change has no work document, and `0 / 0` would read
+as a feature with no tests rather than one that never had scenarios.
+
+**`result` is evidence, not a formality.** Write `PASS` only for a command you ran and watched
+succeed. Nothing was run — no JDK here, the module's suite is not runnable in this session, the
+user has not run it yet — then it is `NOT_RUN` plus a `note` saying why:
+
+```json
+"build": {
+  "command": "./gradlew :web-api:test --tests com.oh.api.FooTest",
+  "result": "NOT_RUN",
+  "note": "no JDK on this machine; build not executed",
+  "timestamp": "2026-10-19T04:09:40Z"
+}
+```
+
+Never invent a `PASS`. The file is read as test evidence by reviewers, it is graded, and it lives
+in git history permanently — a fabricated pass is a false verification record, not a placeholder.
+`NOT_RUN` with a reason is always the correct answer when nothing ran.
+
+Show the file content and confirm before writing it:
+
+```
+AskUserQuestion:
+  question: "No progress file on this branch. Create work/features/.progress/<jira-key>.json?"
+  header:   "Progress"
+  multiSelect: false
+  options:
+    - label: "Create as shown" (Recommended) — description: "Write the file, then stage and commit it with the PR"
+    - label: "Edit build result" — description: "Change the command, result, or note"
+    - label: "Cancel" — description: "Stop — the PR cannot be opened without it"
+```
 
 ### Step 2 — Verify rebase status
 
@@ -250,6 +332,7 @@ Template:
 
 ## Changed files / components
 - <service>: <components>
+- work/features/.progress/<jira-key>.json: pipeline progress (<pipeline|manual> source)
 
 ## Jira
 <JIRA-KEY>: <ticket-summary-link>
