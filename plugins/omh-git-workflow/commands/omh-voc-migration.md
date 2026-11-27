@@ -10,7 +10,7 @@ Parse arguments from: $ARGUMENTS
 - First token matching `^[A-Z]+-[0-9]+$` (or a Jira URL containing one) → **jira_key**
 - A filesystem path or repo name → **repo_path** (default `D:\Code\oh-api`)
 
-This skill turns a VOC / data-fix request into a **reviewed, rollback-able SQL migration script** committed under the backend's `migration/` folder and opened as a PR to `master` — the only sanctioned path to running data-mutating SQL on Production (SOP §2). It performs the **Claude AI SQL Review** (SOP §3) itself and seeds the **Production Approval Checklist** (SOP §6) into the PR. It does **not** execute SQL anywhere.
+This skill turns a VOC / data-fix request into a **reviewed, rollback-able SQL migration script** committed under the backend's `migration/` folder and opened as a PR to `master` — the only sanctioned path to running data-mutating SQL on Production (SOP §2). It performs the **Claude AI SQL Review** (SOP §3) itself and seeds the **Production Approval Checklist** (SOP §6) into the PR. It does **not** execute SQL anywhere. A VOC that only asks to check logs or history is answered with attached, masked log evidence instead (Step 1b).
 
 ---
 
@@ -27,6 +27,7 @@ This skill turns a VOC / data-fix request into a **reviewed, rollback-able SQL m
 - **SLA §6 overlay**: if the op is ≥ 50,000 rows or est. > 120 s, it is a Heavy Data Operation — also needs CTO approval, the Regular Deployment Window (Tue & Thu 06:00–08:00 GMT+7), and real-time monitoring.
 - **Branch/PR**: the work branch `{JIRA-KEY}-voc-{desc}` is **always cut from `origin/master`** — never from the current HEAD, `develop`, `staging`, or any other branch (§11). Always `git fetch origin master` first so the base is up to date. Open the PR via `/omh-open-pr` (§13/§15) — do not reimplement PR logic here.
 - **Secrets**: never commit real secrets/keys (e.g. an inline `AES_DECRYPT('<key>')`) into a git-tracked script (CLAUDE.md "no secrets in plugin/repo files") — stop and require a placeholder or secret store.
+- **Log-check tickets need attached evidence (Step 1b)**: when the ticket asks to check logs or history ("check why…", "find where the error comes from", "check the log"), the answer must carry the log itself — an exported log file and/or a screenshot of the exported rows — attached to the ticket, with every sensitive value masked first. A conclusion with only a prose timeline is not enough.
 
 ---
 
@@ -162,6 +163,39 @@ AskUserQuestion:
 
 For generation, call the ohmyhotel MCP (`generate_voc_sql`, else `generate_sql`) and show the result for confirmation before continuing. Never run it; never invent table/column names — generate only from the MCP/schema.
 
+### Step 1b — Log-check / investigation tickets (answer with evidence, usually no SQL)
+
+Some VOCs ask for an investigation, not a data change: "check why bookings came through after stop
+sell", "check the history", "find where the error comes from (vendor side or ELLIS)". For these:
+
+1. **Investigate read-only** — PROD_LOG `BS_VENDOR_TRANSACTION_LOG` / `BS_CHANNEL_TRANSACTION_LOG`,
+   Kibana, and PROD tables via the read-only MCP. Build the timeline from logged facts (seq, TID, URL,
+   timestamp, response) — never from assumptions.
+2. **Export the evidence** — at least one of:
+   - a **log file** (`<KEY>_evidence_log.txt` / `.csv` / `.json`): header with source (DB/index, env,
+     table), extraction time, timezone, then each row with its seq / TID / timestamp and the
+     request/response text, plus the DB rows that prove the effect (who changed what and when);
+   - a **screenshot** (`<KEY>_evidence.png`) of the exported rows — e.g. render the extract as a small
+     HTML table and screenshot it in the browser MCP — highlighting the rows that prove the answer.
+3. **Mask before anything leaves the machine** — replace every sensitive value with `<MASKED>`:
+   passwords, secrets, API keys/tokens, channel keys, `Authorization` / `Bearer` values, signatures,
+   card data (PAN/CVV), and customer contact details (email, phone). Mask by key name when walking the
+   JSON, then grep the final file for `password|secret|token|key|bearer|auth` and stop on any hit that
+   is not `<MASKED>`. Do not export request bodies known to carry credentials at all (e.g. HotelLink
+   `/ota/getInventory` REQUEST_MESSAGE holds the channel key) — say in the file header that they were
+   left out. Check the screenshot by eye for the same values before attaching.
+4. **Prove the export is exact** — when log text is copied out of an MCP result, compare its SHA-256
+   with `SHA2(<column>, 256)` computed on the server (and a `SHA2(GROUP_CONCAT(...))` for transcribed
+   table rows). Any mismatch → fix the transcription; never attach an unverified copy. State the check
+   in the file header.
+5. **Attach and reference** — upload the files to the working ticket (`jira_upload_attachment`; files
+   must sit under the repo path, e.g. `verify/<KEY>-upload/`, deleted after upload), embed the
+   screenshot in the answer comment on its own line (`![<file>](<file>|width=900)`), and list the
+   attachments under an `Evidence:` line in the Rule 2 answer. File names with `_` go in backticks.
+6. **Route the fix** — if the cause is a code defect, the fix goes to a separate Bug linked
+   `blocks` → this ticket (reuse an existing Bug if it is the same defect); no `migration/` folder or PR
+   is created here unless the ticket also needs a data change, which then follows Steps 2–6 as usual.
+
 ### Step 2 — Claude AI SQL Review (SOP §3) — performed by this skill
 
 Analyze the collected SQL and produce the review block in the SOP format. Cover every scope item:
@@ -280,6 +314,7 @@ Print:
 - **Heavy-Op (SLA §6)**: Yes/No
 - **PR**: link (if opened) or "committed only"
 - **Pipeline progress file**: `n/a — SQL migration only` (state it explicitly, so a reader does not read it as an omission)
+- **Evidence (log-check tickets, Step 1b)**: each attached file, the integrity check result (SHA-256 vs DB), the masking result (values masked + grep clean), and the linked Bug if the cause is a code defect
 - **Production Approval Checklist (SOP §6)** — print all 10 items with current state. The skill can mark **#1 Jira / #2 committed / #5 Claude AI review** as done; the rest (#3 PR approved, #4 merged, #6–#10 **Staging execution + evidence**) are **human steps**.
 - **Reminder**: per SOP §2, the script **must be merged to master before any Production run**, and per SOP §6, **missing any checklist item ⇒ do not execute on Production**. Staging execution + CloudWatch evidence are done by the engineer, not this skill.
 
@@ -296,6 +331,8 @@ Print:
 - Do NOT bypass the Git process (commit → PR → approve → merge) — direct PROD execution is prohibited (SOP §2)
 - Do NOT cut the work branch from anything other than `origin/master` (never current HEAD / develop / staging); always fetch first (§11)
 - Do NOT claim the progress-file exemption for a PR that also changes application code — SQL-only is the whole basis of the exemption
+- Do NOT post the answer to a log-check ticket without an attached log file or screenshot of the exported log (Step 1b)
+- Do NOT attach or paste a log, screenshot or SQL result that still shows a password, secret, key/token, `Authorization` value, card data or customer contact details — mask first, grep, then attach
 
 ---
 
